@@ -8,7 +8,7 @@ removes facts that cannot be found in the data.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -48,7 +48,7 @@ VERIFIER_SYSTEM_PROMPT = """\
 
 
 async def verify_key_facts(
-    llm: "LLMClient",
+    llm: LLMClient,
     decision: TradingDecision,
     data_summary: str,
 ) -> tuple[TradingDecision, list[str]]:

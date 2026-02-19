@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from japan_trading_agents.cli import cli
 from japan_trading_agents.config import Config
 from japan_trading_agents.graph import run_portfolio
 from japan_trading_agents.models import AnalysisResult, PortfolioResult, TradingDecision
-from japan_trading_agents.notifier import TelegramNotifier, _format_portfolio_message
-
+from japan_trading_agents.notifier import _format_portfolio_message
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -28,7 +25,7 @@ def _make_result(
     company: str | None = None,
     approved: bool = True,
 ) -> AnalysisResult:
-    from japan_trading_agents.models import AgentReport, RiskReview
+    from japan_trading_agents.models import RiskReview
 
     decision = TradingDecision(
         action=action,  # type: ignore[arg-type]

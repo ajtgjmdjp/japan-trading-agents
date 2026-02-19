@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from japan_trading_agents.data.fact_library import (
     _get_sector_interp_note,
     build_verified_data_summary,
 )
-
 
 # ---------------------------------------------------------------------------
 # _get_sector_interp_note

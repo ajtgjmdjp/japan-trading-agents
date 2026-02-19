@@ -232,7 +232,7 @@ def build_verified_data_summary(
             sections.append(f"- {L['week52_low']}: ¥{w52l:,.0f}")
             if close and w52h > w52l:
                 pct = (close - w52l) / (w52h - w52l) * 100
-                sections.append(f"- " + L["range_pct"].format(pct=pct))
+                sections.append("- " + L["range_pct"].format(pct=pct))
         vol = sp.get("volume")
         sections.append(f"- {L['volume']}: {vol:,}" if vol else f"- {L['volume']}: N/A")
         if avg30 := sp.get("avg_volume_30d"):
@@ -246,7 +246,7 @@ def build_verified_data_summary(
         if pb := sp.get("price_to_book"):
             sections.append(f"- {L['pbr']}: {pb:.2f}x")
         if mcap := sp.get("market_cap"):
-            sections.append(f"- " + L["market_cap"].format(value=mcap / 1e8))
+            sections.append("- " + L["market_cap"].format(value=mcap / 1e8))
         if sector := sp.get("sector"):
             sections.append(f"- {L['sector']}: {sector}")
         if eps := sp.get("trailing_eps"):
@@ -255,7 +255,7 @@ def build_verified_data_summary(
             pct = dy * 100  # adapter normalizes to decimal form (0.0256 = 2.56%)
             if pct < 30:  # sanity: ignore implausible yield (> 30% = data error)
                 sections.append(f"- {L['div_yield']}: {pct:.2f}%")
-        sections.append(f"- " + L["data_period"].format(n=sp.get("total_points", "?")))
+        sections.append("- " + L["data_period"].format(n=sp.get("total_points", "?")))
         sections.append("")
 
     # --- FX rates (yfinance, real-time macro context) ---
@@ -264,9 +264,9 @@ def build_verified_data_summary(
         sections.append(L["fx_source_note"])
         for pair, rate in fx.get("rates", {}).items():
             if pair == "USDJPY":
-                sections.append(f"- " + L["fx_usd"].format(rate=rate))
+                sections.append("- " + L["fx_usd"].format(rate=rate))
             elif pair == "EURJPY":
-                sections.append(f"- " + L["fx_eur"].format(rate=rate))
+                sections.append("- " + L["fx_eur"].format(rate=rate))
         sections.append(L["fx_note"])
         sections.append("")
 

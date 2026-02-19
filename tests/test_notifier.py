@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from japan_trading_agents.models import (
-    AgentReport,
     AnalysisResult,
     KeyFact,
     RiskReview,
