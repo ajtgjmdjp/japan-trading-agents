@@ -63,17 +63,16 @@ def diff_results(old: AnalysisResult, new: AnalysisResult) -> list[str]:
     old_d = old.decision
     new_d = new.decision
 
-    if old_d is None and new_d is None:
+    if old_d is None:
+        if new_d is not None:
+            changes.append(f"New signal: {new_d.action} ({new_d.confidence:.0%})")
         return changes
 
-    if old_d is None and new_d is not None:
-        changes.append(f"New signal: {new_d.action} ({new_d.confidence:.0%})")
-        return changes
-
-    if old_d is not None and new_d is None:
+    if new_d is None:
         changes.append("Signal lost (analysis failed)")
         return changes
 
+    # At this point both old_d and new_d are non-None
     # Action change — always report
     if old_d.action != new_d.action:
         changes.append(f"⚡ {old_d.action} → {new_d.action}")
