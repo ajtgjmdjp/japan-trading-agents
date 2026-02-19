@@ -392,9 +392,6 @@ async def _run_portfolio(
     from japan_trading_agents.graph import run_portfolio
     from japan_trading_agents.snapshot import diff_results, load_snapshot, save_snapshot
 
-    lang = config.language if config.language in ("ja", "en") else "ja"
-    T = _UI[lang]
-
     # Load previous snapshots before analysis
     old_snapshots = {c: load_snapshot(c) for c in codes}
 

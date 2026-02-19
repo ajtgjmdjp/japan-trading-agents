@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
 
-from japan_trading_agents.models import AnalysisResult, PortfolioResult
+if TYPE_CHECKING:
+    from japan_trading_agents.models import AnalysisResult, PortfolioResult
 
 
 def _upside_str(current: float, target: float) -> str:
@@ -37,10 +39,10 @@ def _format_message(result: AnalysisResult) -> str:
         current_price = stock_price.get("current_price") or stock_price.get("close")
 
     lines: list[str] = [
-        f"━━━━━━━━━━━━━━━━━━━━━━━━",
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
         f"🏦 JTA Research: {result.code}{company}",
-        f"━━━━━━━━━━━━━━━━━━━━━━━━",
-        f"",
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
+        "",
         f"{action_emoji} <b>{decision.action}</b>  |  確度: {decision.confidence:.0%}  |  {risk_status}",
     ]
 
@@ -81,10 +83,10 @@ def _format_message(result: AnalysisResult) -> str:
     sources = ", ".join(result.sources_used) if result.sources_used else "—"
     lines += [
         "",
-        f"━━━━━━━━━━━━━━━━━━━━━━━━",
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
         f"📡 {sources}",
         f"⏰ {ts} | {result.model}",
-        f"⚠️ 投資助言ではありません。教育・研究目的のみ。",
+        "⚠️ 投資助言ではありません。教育・研究目的のみ。",
     ]
 
     return "\n".join(lines)
@@ -106,7 +108,7 @@ def _format_portfolio_message(
 
     lines: list[str] = [
         "━━━━━━━━━━━━━━━━━━━━━━━━",
-        f"📊 JTA ポートフォリオ分析",
+        "📊 JTA ポートフォリオ分析",
         f"⏰ {ts} | {analyzed}/{total}銘柄",
         "━━━━━━━━━━━━━━━━━━━━━━━━",
     ]
@@ -148,7 +150,7 @@ def _format_portfolio_message(
     lines += [
         "",
         "━━━━━━━━━━━━━━━━━━━━━━━━",
-        f"⚠️ 投資助言ではありません。教育・研究目的のみ。",
+        "⚠️ 投資助言ではありません。教育・研究目的のみ。",
     ]
     return "\n".join(lines)
 

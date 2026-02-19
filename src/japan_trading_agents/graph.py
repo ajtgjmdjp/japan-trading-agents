@@ -345,7 +345,7 @@ def _parse_risk_review(report: AgentReport) -> RiskReview:
 
 async def run_portfolio(
     codes: list[str],
-    config: "Config",
+    config: Config,
     max_concurrent: int = 3,
 ) -> PortfolioResult:
     """Analyze multiple stocks in parallel with a concurrency limit.
@@ -372,7 +372,7 @@ async def run_portfolio(
 
     results: list[AnalysisResult] = []
     failed: list[str] = []
-    for code, outcome in zip(codes, outcomes):
+    for code, outcome in zip(codes, outcomes, strict=False):
         if outcome is None:
             failed.append(code)
         else:

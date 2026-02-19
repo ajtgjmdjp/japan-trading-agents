@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from japan_trading_agents.models import AnalysisResult, RiskReview, TradingDecision
+
+if TYPE_CHECKING:
+    from pathlib import Path
 from japan_trading_agents.snapshot import (
     DEFAULT_SNAPSHOT_DIR,
     diff_results,
@@ -15,7 +15,6 @@ from japan_trading_agents.snapshot import (
     save_snapshot,
     snapshot_path,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
