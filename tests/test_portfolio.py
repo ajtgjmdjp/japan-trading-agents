@@ -58,7 +58,9 @@ def test_portfolio_result_buy_hold_sell_partition() -> None:
         _make_result("8306", "HOLD", 0.6),
         _make_result("4502", "SELL", 0.55),
     ]
-    portfolio = PortfolioResult(codes=["7203", "8306", "4502"], results=results, model="gpt-4o-mini")
+    portfolio = PortfolioResult(
+        codes=["7203", "8306", "4502"], results=results, model="gpt-4o-mini"
+    )
     assert len(portfolio.buy_results) == 1
     assert len(portfolio.hold_results) == 1
     assert len(portfolio.sell_results) == 1
@@ -90,9 +92,7 @@ def test_portfolio_result_failed_codes() -> None:
 
 @patch("japan_trading_agents.graph.fetch_all_data", new_callable=AsyncMock)
 @patch("japan_trading_agents.graph.search_companies_edinet", new_callable=AsyncMock)
-async def test_run_portfolio_all_succeed(
-    mock_edinet: AsyncMock, mock_fetch: AsyncMock
-) -> None:
+async def test_run_portfolio_all_succeed(mock_edinet: AsyncMock, mock_fetch: AsyncMock) -> None:
     mock_edinet.return_value = []
     mock_fetch.return_value = {"stock_price": {"close": 3000}}
 
@@ -103,8 +103,14 @@ async def test_run_portfolio_all_succeed(
     async def mock_acompletion(**kwargs: object) -> MagicMock:
         if kwargs.get("response_format"):
             mock_choice.message.content = json.dumps(
-                {"action": "HOLD", "confidence": 0.5, "reasoning": "OK",
-                 "approved": True, "concerns": [], "max_position_pct": None}
+                {
+                    "action": "HOLD",
+                    "confidence": 0.5,
+                    "reasoning": "OK",
+                    "approved": True,
+                    "concerns": [],
+                    "max_position_pct": None,
+                }
             )
         else:
             mock_choice.message.content = "Mock analysis"
@@ -144,8 +150,14 @@ async def test_run_portfolio_partial_failure(
     async def mock_acompletion(**kwargs: object) -> MagicMock:
         if kwargs.get("response_format"):
             mock_choice.message.content = json.dumps(
-                {"action": "BUY", "confidence": 0.7, "reasoning": "Good",
-                 "approved": True, "concerns": [], "max_position_pct": None}
+                {
+                    "action": "BUY",
+                    "confidence": 0.7,
+                    "reasoning": "Good",
+                    "approved": True,
+                    "concerns": [],
+                    "max_position_pct": None,
+                }
             )
         else:
             mock_choice.message.content = "Mock"
@@ -188,8 +200,14 @@ async def test_run_portfolio_concurrency_limit(
         mock_response.choices = [mock_choice]
         if kwargs.get("response_format"):
             mock_choice.message.content = json.dumps(
-                {"action": "HOLD", "confidence": 0.5, "reasoning": "OK",
-                 "approved": True, "concerns": [], "max_position_pct": None}
+                {
+                    "action": "HOLD",
+                    "confidence": 0.5,
+                    "reasoning": "OK",
+                    "approved": True,
+                    "concerns": [],
+                    "max_position_pct": None,
+                }
             )
         else:
             mock_choice.message.content = "Mock"
@@ -235,7 +253,9 @@ def test_format_portfolio_message_with_failed() -> None:
 
 
 def test_format_portfolio_message_empty_results() -> None:
-    portfolio = PortfolioResult(codes=["9999"], results=[], failed_codes=["9999"], model="gpt-4o-mini")
+    portfolio = PortfolioResult(
+        codes=["9999"], results=[], failed_codes=["9999"], model="gpt-4o-mini"
+    )
     msg = _format_portfolio_message(portfolio)
     assert "失敗" in msg
 
@@ -247,9 +267,7 @@ def test_format_portfolio_message_empty_results() -> None:
 
 @patch("japan_trading_agents.graph.fetch_all_data", new_callable=AsyncMock)
 @patch("japan_trading_agents.graph.search_companies_edinet", new_callable=AsyncMock)
-def test_cli_portfolio_table_output(
-    mock_edinet: AsyncMock, mock_fetch: AsyncMock
-) -> None:
+def test_cli_portfolio_table_output(mock_edinet: AsyncMock, mock_fetch: AsyncMock) -> None:
     mock_edinet.return_value = []
     mock_fetch.return_value = {"stock_price": {"close": 3000}}
 
@@ -260,8 +278,14 @@ def test_cli_portfolio_table_output(
     async def mock_acompletion(**kwargs: object) -> MagicMock:
         if kwargs.get("response_format"):
             mock_choice.message.content = json.dumps(
-                {"action": "BUY", "confidence": 0.75, "reasoning": "Good",
-                 "approved": True, "concerns": [], "max_position_pct": None}
+                {
+                    "action": "BUY",
+                    "confidence": 0.75,
+                    "reasoning": "Good",
+                    "approved": True,
+                    "concerns": [],
+                    "max_position_pct": None,
+                }
             )
         else:
             mock_choice.message.content = "Mock analysis"
@@ -279,9 +303,7 @@ def test_cli_portfolio_table_output(
 
 @patch("japan_trading_agents.graph.fetch_all_data", new_callable=AsyncMock)
 @patch("japan_trading_agents.graph.search_companies_edinet", new_callable=AsyncMock)
-def test_cli_portfolio_json_output(
-    mock_edinet: AsyncMock, mock_fetch: AsyncMock
-) -> None:
+def test_cli_portfolio_json_output(mock_edinet: AsyncMock, mock_fetch: AsyncMock) -> None:
     mock_edinet.return_value = []
     mock_fetch.return_value = {}
 
@@ -291,8 +313,14 @@ def test_cli_portfolio_json_output(
         mock_response.choices = [mock_choice]
         if kwargs.get("response_format"):
             mock_choice.message.content = json.dumps(
-                {"action": "HOLD", "confidence": 0.5, "reasoning": "OK",
-                 "approved": True, "concerns": [], "max_position_pct": None}
+                {
+                    "action": "HOLD",
+                    "confidence": 0.5,
+                    "reasoning": "OK",
+                    "approved": True,
+                    "concerns": [],
+                    "max_position_pct": None,
+                }
             )
         else:
             mock_choice.message.content = "Mock"

@@ -82,9 +82,7 @@ def diff_results(old: AnalysisResult, new: AnalysisResult) -> list[str]:
     conf_delta = new_d.confidence - old_d.confidence
     if abs(conf_delta) >= 0.15:
         arrow = "↑" if conf_delta > 0 else "↓"
-        changes.append(
-            f"Conf {arrow} {old_d.confidence:.0%} → {new_d.confidence:.0%}"
-        )
+        changes.append(f"Conf {arrow} {old_d.confidence:.0%} → {new_d.confidence:.0%}")
 
     # Risk approval flip
     old_r = old.risk_review

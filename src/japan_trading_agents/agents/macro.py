@@ -60,13 +60,19 @@ class MacroAnalyst(BaseAgent):
 
         if self.language == "en":
             parts = [f"Analyze the macroeconomic environment for stock code {code}.\n"]
-            parts.append("Use ONLY data provided below. If a section is missing, write 'Data unavailable.' and stop.\n")
+            parts.append(
+                "Use ONLY data provided below. If a section is missing, write 'Data unavailable.' and stop.\n"
+            )
             if fx:
-                parts.append(f"## FX Rates (real-time)\n{json.dumps(fx, ensure_ascii=False, indent=2)}\n")
+                parts.append(
+                    f"## FX Rates (real-time)\n{json.dumps(fx, ensure_ascii=False, indent=2)}\n"
+                )
             else:
                 parts.append("## FX Rates: Data unavailable.\n")
             if boj:
-                parts.append(f"## BOJ Data (monetary policy)\n{json.dumps(boj, ensure_ascii=False, indent=2)}\n")
+                parts.append(
+                    f"## BOJ Data (monetary policy)\n{json.dumps(boj, ensure_ascii=False, indent=2)}\n"
+                )
             else:
                 parts.append("## BOJ Data: Data unavailable.\n")
             if macro:
@@ -78,13 +84,19 @@ class MacroAnalyst(BaseAgent):
                 parts.append("## e-Stat: Data unavailable.\n")
         else:
             parts = [f"銘柄コード {code} に関連するマクロ経済環境を分析してください。\n"]
-            parts.append("以下のデータのみを使用すること。データがないセクションは「取得不可」の一行のみ記載。\n")
+            parts.append(
+                "以下のデータのみを使用すること。データがないセクションは「取得不可」の一行のみ記載。\n"
+            )
             if fx:
-                parts.append(f"## 為替レート（リアルタイム）\n{json.dumps(fx, ensure_ascii=False, indent=2)}\n")
+                parts.append(
+                    f"## 為替レート（リアルタイム）\n{json.dumps(fx, ensure_ascii=False, indent=2)}\n"
+                )
             else:
                 parts.append("## 為替レート: 取得不可\n")
             if boj:
-                parts.append(f"## BOJデータ（金融政策）\n{json.dumps(boj, ensure_ascii=False, indent=2)}\n")
+                parts.append(
+                    f"## BOJデータ（金融政策）\n{json.dumps(boj, ensure_ascii=False, indent=2)}\n"
+                )
             else:
                 parts.append("## BOJデータ: 取得不可\n")
             if macro:

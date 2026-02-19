@@ -12,7 +12,9 @@ if TYPE_CHECKING:
 
 # Sandwich approach: prefix + remove JP instruction + suffix
 _EN_PREFIX = "**CRITICAL INSTRUCTION: Respond ONLY in English. Do not use Japanese.**\n\n"
-_EN_SUFFIX = "\n\n**FINAL REMINDER: All output must be in English only. Japanese is not acceptable.**"
+_EN_SUFFIX = (
+    "\n\n**FINAL REMINDER: All output must be in English only. Japanese is not acceptable.**"
+)
 
 # Regex to strip the Japanese language instruction line from system prompts
 _JP_LANG_RE = re.compile(r"\*\*出力言語[：:\s]*日本語[^*\n]*\*\*[^\n]*\n?")

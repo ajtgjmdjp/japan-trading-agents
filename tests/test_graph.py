@@ -325,8 +325,14 @@ async def test_run_analysis_debate_failure_graceful(
         if kwargs.get("response_format"):
             # Trader / Risk manager
             mock_choice.message.content = json.dumps(
-                {"action": "HOLD", "confidence": 0.4,
-                 "approved": True, "concerns": [], "max_position_pct": None, "reasoning": "OK"}
+                {
+                    "action": "HOLD",
+                    "confidence": 0.4,
+                    "approved": True,
+                    "concerns": [],
+                    "max_position_pct": None,
+                    "reasoning": "OK",
+                }
             )
         else:
             # Phase 1 analysts succeed; Phase 2 (debate) fails on 6th call

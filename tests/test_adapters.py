@@ -71,6 +71,7 @@ async def test_get_news_not_installed(mock_avail: MagicMock) -> None:
 async def test_get_stock_price_yfinance_empty(mock_avail: MagicMock | None = None) -> None:
     """Returns None when yfinance returns empty DataFrame."""
     import pandas as pd
+
     mock_ticker = MagicMock()
     mock_ticker.history.return_value = pd.DataFrame()
     with patch("yfinance.Ticker", return_value=mock_ticker):
@@ -116,7 +117,13 @@ async def test_get_stock_price_info_failure_graceful() -> None:
 
     dates = pd.to_datetime(["2024-01-15"])
     hist = pd.DataFrame(
-        {"Open": [2500.0], "High": [2600.0], "Low": [2480.0], "Close": [2550.0], "Volume": [1000000]},
+        {
+            "Open": [2500.0],
+            "High": [2600.0],
+            "Low": [2480.0],
+            "Close": [2550.0],
+            "Volume": [1000000],
+        },
         index=dates,
     )
     mock_ticker = MagicMock()
@@ -150,6 +157,7 @@ async def test_get_estat_data_not_installed(mock_avail: MagicMock) -> None:
 @patch.object(adapters, "_is_available", return_value=False)
 async def test_fetch_all_data_none_available(mock_avail: MagicMock) -> None:
     import pandas as pd
+
     mock_ticker = MagicMock()
     mock_ticker.history.return_value = pd.DataFrame()
     with patch("yfinance.Ticker", return_value=mock_ticker):

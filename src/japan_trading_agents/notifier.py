@@ -23,7 +23,11 @@ def _format_message(result: AnalysisResult) -> str:
     """Format analysis result as a professional research report for Telegram."""
     decision = result.decision
     risk = result.risk_review
-    ts = result.timestamp.strftime("%Y-%m-%d %H:%M") if result.timestamp else datetime.now().strftime("%Y-%m-%d %H:%M")
+    ts = (
+        result.timestamp.strftime("%Y-%m-%d %H:%M")
+        if result.timestamp
+        else datetime.now().strftime("%Y-%m-%d %H:%M")
+    )
 
     if decision is None:
         return f"🔔 JTA: {result.code} — 分析失敗（決定なし）\n⏰ {ts}"
@@ -50,10 +54,14 @@ def _format_message(result: AnalysisResult) -> str:
     if current_price:
         lines.append(f"💰 現在値:  ¥{current_price:,.0f}")
     if decision.target_price:
-        upside = f" ({_upside_str(current_price, decision.target_price)} 想定)" if current_price else ""
+        upside = (
+            f" ({_upside_str(current_price, decision.target_price)} 想定)" if current_price else ""
+        )
         lines.append(f"🎯 目標株価: ¥{decision.target_price:,.0f}{upside}")
     if decision.stop_loss:
-        downside = f" ({_upside_str(current_price, decision.stop_loss)} 下値)"if current_price else ""
+        downside = (
+            f" ({_upside_str(current_price, decision.stop_loss)} 下値)" if current_price else ""
+        )
         lines.append(f"🛑 損切り:  ¥{decision.stop_loss:,.0f}{downside}")
 
     # Investment thesis
@@ -133,9 +141,13 @@ def _format_portfolio_message(
         ("SELL", "📉", portfolio.sell_results),
     ]:
         if group:
-            lines.append(f"\n🟢 {label} ({len(group)}件)" if label == "BUY"
-                         else f"\n🟡 {label} ({len(group)}件)" if label == "HOLD"
-                         else f"\n🔴 {label} ({len(group)}件)")
+            lines.append(
+                f"\n🟢 {label} ({len(group)}件)"
+                if label == "BUY"
+                else f"\n🟡 {label} ({len(group)}件)"
+                if label == "HOLD"
+                else f"\n🔴 {label} ({len(group)}件)"
+            )
             for result in group:
                 line = f"{emoji} {_result_line(result)}"
                 if changes:
@@ -172,9 +184,7 @@ class TelegramNotifier:
     async def send(self, result: AnalysisResult) -> bool:
         """Send analysis result to Telegram. Returns True on success."""
         if not self.is_configured():
-            logger.warning(
-                "Telegram not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID."
-            )
+            logger.warning("Telegram not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.")
             return False
 
         text = _format_message(result)

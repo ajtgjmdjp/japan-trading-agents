@@ -66,8 +66,8 @@ def test_format_message_buy_approved() -> None:
     assert "75%" in msg
     assert "✅ Risk: APPROVED" in msg
     assert "Strong thesis" in msg
-    assert "4,200" in msg   # target price
-    assert "3,400" in msg   # stop loss
+    assert "4,200" in msg  # target price
+    assert "3,400" in msg  # stop loss
     assert "EDINET FY2024" in msg  # key fact source
 
 

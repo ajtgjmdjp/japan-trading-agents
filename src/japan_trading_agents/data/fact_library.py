@@ -146,9 +146,7 @@ def _get_sector_interp_note(sector: str, language: str) -> str:
     return ""
 
 
-def build_verified_data_summary(
-    data: dict[str, Any], code: str, language: str = "ja"
-) -> str:
+def build_verified_data_summary(data: dict[str, Any], code: str, language: str = "ja") -> str:
     """Build a source-labeled data summary for downstream agents.
 
     Returns a structured text where every value is tagged with its data source.
@@ -194,9 +192,7 @@ def build_verified_data_summary(
         sections.append(L["boj_section"])
         sections.append(f"{L['boj_source_note']} `{label}`")
         if latest := boj.get("latest"):
-            sections.append(
-                f"- {name}: {latest.get('value')} {unit} ({latest.get('date')})"
-            )
+            sections.append(f"- {name}: {latest.get('value')} {unit} ({latest.get('date')})")
         if recent := boj.get("recent"):
             # Show last 3 data points for trend
             for obs in recent[-3:]:
@@ -222,7 +218,11 @@ def build_verified_data_summary(
         sections.append(f"{L['price_section']} ({ticker})")
         sections.append(f"{L['price_source_note']} `{label}`")
         close = sp.get("close")
-        sections.append(f"- {L['close']}: ¥{close:,.0f}" if close else f"- {L['close']}: ¥{sp.get('close', '?')}")
+        sections.append(
+            f"- {L['close']}: ¥{close:,.0f}"
+            if close
+            else f"- {L['close']}: ¥{sp.get('close', '?')}"
+        )
         sections.append(f"- {L['high']}: ¥{sp.get('high', '?')}")
         sections.append(f"- {L['low']}: ¥{sp.get('low', '?')}")
         w52h = sp.get("week52_high")

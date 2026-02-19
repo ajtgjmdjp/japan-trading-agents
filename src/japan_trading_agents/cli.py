@@ -68,7 +68,9 @@ def cli() -> None:
     help="Output language: ja (Japanese) or en (English)",
 )
 @click.option(
-    "--notify", is_flag=True, help="Send result to Telegram (requires TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)"
+    "--notify",
+    is_flag=True,
+    help="Send result to Telegram (requires TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)",
 )
 def analyze(
     code: str,
@@ -351,9 +353,7 @@ def check() -> None:
     help="Output language",
 )
 @click.option("--json-output", is_flag=True, help="Output as JSON")
-@click.option(
-    "--notify", is_flag=True, help="Send portfolio summary to Telegram"
-)
+@click.option("--notify", is_flag=True, help="Send portfolio summary to Telegram")
 def portfolio(
     codes: tuple[str, ...],
     model: str,
@@ -454,7 +454,9 @@ async def _run_portfolio(
             action_str = "[dim]N/A[/dim]"
             conf_str = risk_str = target_str = stop_str = "—"
         change_display = f"[yellow]{change_str}[/yellow]" if change_str else ""
-        table.add_row(r.code, company, action_str, conf_str, risk_str, target_str, stop_str, change_display)
+        table.add_row(
+            r.code, company, action_str, conf_str, risk_str, target_str, stop_str, change_display
+        )
 
     for code in result.failed_codes:
         table.add_row(code, "", "[red]FAILED[/red]", "—", "—", "—", "—", "")
@@ -468,7 +470,9 @@ async def _run_portfolio(
         f"\n[green]BUY {buys}[/green] / [yellow]HOLD {holds}[/yellow] / [red]SELL {sells}[/red]"
         + (f" / [dim]FAILED {len(result.failed_codes)}[/dim]" if result.failed_codes else "")
     )
-    console.print("\n[dim]This is not financial advice. For educational and research purposes only.[/dim]")
+    console.print(
+        "\n[dim]This is not financial advice. For educational and research purposes only.[/dim]"
+    )
 
     # Telegram
     if notify:

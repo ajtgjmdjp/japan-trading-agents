@@ -62,7 +62,9 @@ def _build_researcher_prompt(
         elif isinstance(r, dict):
             parts.append(f"### {r.get('display_name', 'Analyst')}\n{r.get('content', '')}\n")
     if counter_case:
-        content = counter_case.content if isinstance(counter_case, AgentReport) else str(counter_case)
+        content = (
+            counter_case.content if isinstance(counter_case, AgentReport) else str(counter_case)
+        )
         parts.append(f"\n## {counter_label}\n{content}\n")
         parts.append(f"\n{rebuttal_instruction}")
     return "\n".join(parts)

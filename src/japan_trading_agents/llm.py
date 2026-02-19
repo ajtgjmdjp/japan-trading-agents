@@ -12,10 +12,11 @@ litellm.suppress_debug_info = True
 
 # Reasoning models only accept temperature=1 (they manage internal temperature themselves)
 _REASONING_MODEL_PATTERNS = (
-    "kimi-k2",          # Moonshot Kimi K2 series
-    "kimi-thinking",    # Moonshot Kimi Thinking
-    "o1", "o3",         # OpenAI o1/o3 family
-    "deepseek-r1",      # DeepSeek R1
+    "kimi-k2",  # Moonshot Kimi K2 series
+    "kimi-thinking",  # Moonshot Kimi Thinking
+    "o1",
+    "o3",  # OpenAI o1/o3 family
+    "deepseek-r1",  # DeepSeek R1
 )
 
 

@@ -91,7 +91,9 @@ async def run_analysis(code: str, config: Config) -> AnalysisResult:
     debate: DebateResult | None = None
     try:
         logger.info("Running bull/bear debate...")
-        debate = await _run_debate(llm, analyst_reports, data, config.debate_rounds, language=language)
+        debate = await _run_debate(
+            llm, analyst_reports, data, config.debate_rounds, language=language
+        )
     except Exception as e:
         logger.warning(f"Debate phase failed, proceeding without debate: {e}")
 
@@ -102,7 +104,9 @@ async def run_analysis(code: str, config: Config) -> AnalysisResult:
     verifier_feedback: list[str] = []
     try:
         logger.info("Running trader agent...")
-        decision_report = await _run_trader(llm, analyst_reports, debate, data, data_summary, language=language)
+        decision_report = await _run_trader(
+            llm, analyst_reports, debate, data, data_summary, language=language
+        )
 
         # Phase 3.5: Fact verification — correct/remove hallucinated source citations
         logger.info("Running fact verifier...")
@@ -112,7 +116,9 @@ async def run_analysis(code: str, config: Config) -> AnalysisResult:
         # Phase 3.6: MALT Refine — if verifier made corrections, update Trader's thesis
         if verifier_feedback:
             logger.info(f"Running MALT refine step ({len(verifier_feedback)} corrections)...")
-            decision = await _refine_decision(llm, decision, verifier_feedback, data_summary, language=language)
+            decision = await _refine_decision(
+                llm, decision, verifier_feedback, data_summary, language=language
+            )
     except Exception as e:
         logger.warning(f"Trader/verifier phase failed, proceeding without decision: {e}")
 
@@ -121,7 +127,9 @@ async def run_analysis(code: str, config: Config) -> AnalysisResult:
     if decision_report is not None:
         try:
             logger.info("Running risk manager...")
-            risk_report = await _run_risk_manager(llm, decision_report, analyst_reports, data, language=language)
+            risk_report = await _run_risk_manager(
+                llm, decision_report, analyst_reports, data, language=language
+            )
             risk_review = _parse_risk_review(risk_report)
         except Exception as e:
             logger.warning(f"Risk manager phase failed: {e}")
