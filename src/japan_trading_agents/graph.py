@@ -13,6 +13,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+from openai import OpenAIError
 
 from japan_trading_agents.agents import (
     BearResearcher,
@@ -53,8 +54,77 @@ async def run_analysis(code: str, config: Config) -> AnalysisResult:
         Complete analysis result with all agent reports and decisions.
     """
     llm = LLMClient(model=config.model, temperature=config.temperature)
+    language = config.language if config.language in ("ja", "en") else "ja"
+    phase_errors: dict[str, str] = {}
 
-    # Auto-resolve EDINET code from stock code if not provided
+    # Phase 0: Fetch all data in parallel
+    data, sources_used = await _run_data_collection_phase(code, config)
+
+    # Phase 1: Analyst reports in parallel
+    logger.info("Running analyst agents...")
+    analyst_reports = await _run_analysts(llm, data, language=language)
+    if len(analyst_reports) < 5:
+        failed_count = 5 - len(analyst_reports)
+        phase_errors["analysts"] = f"{failed_count}/5 analyst agents failed"
+
+    # Phase 2: Bull vs Bear debate (graceful degradation)
+    debate = await _run_debate_phase(
+        llm, analyst_reports, data, config.debate_rounds, language,
+        phase_errors=phase_errors,
+    )
+
+    # Phase 3: Trading decision (with verified data summary)
+    data_summary = build_verified_data_summary(data, code, language=language)
+    decision_report, decision, _ = await _run_trader_phase(
+        llm, analyst_reports, debate, data, data_summary, language=language,
+        phase_errors=phase_errors,
+    )
+
+    # Phase 4: Risk review
+    risk_review = await _run_risk_phase(
+        llm, decision_report, analyst_reports, data, language,
+        phase_errors=phase_errors,
+    )
+
+    result = _build_result(
+        code, analyst_reports, debate, decision, risk_review, sources_used, config, data
+    )
+    result.phase_errors = phase_errors
+    return result
+
+
+def _build_result(
+    code: str,
+    analyst_reports: list[AgentReport],
+    debate: DebateResult | None,
+    decision: TradingDecision | None,
+    risk_review: RiskReview | None,
+    sources_used: list[str],
+    config: Config,
+    data: dict[str, Any],
+) -> AnalysisResult:
+    """Build the final AnalysisResult from pipeline outputs."""
+    company_name = None
+    if data.get("statements"):
+        company_name = data["statements"].get("company_name")
+
+    return AnalysisResult(
+        code=code,
+        company_name=company_name,
+        analyst_reports=analyst_reports,
+        debate=debate,
+        decision=decision,
+        risk_review=risk_review,
+        sources_used=sources_used,
+        model=config.model,
+        raw_data={k: v for k, v in data.items() if k != "code"},
+    )
+
+
+async def _run_data_collection_phase(
+    code: str, config: Config
+) -> tuple[dict[str, Any], list[str]]:
+    """Phase 0: Resolve EDINET code and fetch all data sources in parallel."""
     edinet_code = config.edinet_code
     if not edinet_code:
         results = await search_companies_edinet(code)
@@ -62,43 +132,78 @@ async def run_analysis(code: str, config: Config) -> AnalysisResult:
             edinet_code = results[0]["edinet_code"]
             logger.info(f"Resolved EDINET code: {code} -> {edinet_code}")
 
-    # Phase 0: Fetch all data in parallel
     logger.info(f"Fetching data for {code}...")
     data = await fetch_all_data(
-        code,
-        edinet_code=edinet_code,
-        timeout=config.task_timeout,
+        code, edinet_code=edinet_code, timeout=config.task_timeout
     )
-
-    # Add stock code to data context
     data["code"] = code
 
-    # Track which sources returned data
     sources_used = [
         key
-        for key in ("statements", "disclosures", "stock_price", "news", "macro", "boj", "fx")
+        for key in ("statements", "disclosures", "stock_price", "news", "macro", "fx")
         if data.get(key)
     ]
     logger.info(f"Data sources available: {sources_used}")
+    return data, sources_used
 
-    language = config.language if config.language in ("ja", "en") else "ja"
 
-    # Phase 1: Analyst reports in parallel
-    logger.info("Running analyst agents...")
-    analyst_reports = await _run_analysts(llm, data, language=language)
-
-    # Phase 2: Bull vs Bear debate (graceful degradation — failure yields debate=None)
-    debate: DebateResult | None = None
+async def _run_debate_phase(
+    llm: LLMClient,
+    analyst_reports: list[AgentReport],
+    data: dict[str, Any],
+    rounds: int,
+    language: str,
+    phase_errors: dict[str, str] | None = None,
+) -> DebateResult | None:
+    """Phase 2: Bull vs Bear debate with graceful degradation."""
     try:
         logger.info("Running bull/bear debate...")
-        debate = await _run_debate(
-            llm, analyst_reports, data, config.debate_rounds, language=language
+        return await _run_debate(
+            llm, analyst_reports, data, rounds, language=language
         )
-    except Exception as e:
+    except (OpenAIError, KeyError, ValueError, TypeError) as e:
         logger.warning(f"Debate phase failed, proceeding without debate: {e}")
+        if phase_errors is not None:
+            phase_errors["debate"] = str(e)
+        return None
 
-    # Phase 3: Trading decision (with verified data summary)
-    data_summary = build_verified_data_summary(data, code, language=language)
+
+async def _run_risk_phase(
+    llm: LLMClient,
+    decision_report: AgentReport | None,
+    analyst_reports: list[AgentReport],
+    data: dict[str, Any],
+    language: str,
+    phase_errors: dict[str, str] | None = None,
+) -> RiskReview | None:
+    """Phase 4: Risk review with graceful degradation."""
+    if decision_report is None:
+        if phase_errors is not None:
+            phase_errors["risk_review"] = "Skipped (no trading decision)"
+        return None
+    try:
+        logger.info("Running risk manager...")
+        risk_report = await _run_risk_manager(
+            llm, decision_report, analyst_reports, data, language=language
+        )
+        return _parse_risk_review(risk_report)
+    except (OpenAIError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+        logger.warning(f"Risk manager phase failed: {e}")
+        if phase_errors is not None:
+            phase_errors["risk_review"] = str(e)
+        return None
+
+
+async def _run_trader_phase(
+    llm: LLMClient,
+    analyst_reports: list[AgentReport],
+    debate: DebateResult | None,
+    data: dict[str, Any],
+    data_summary: str,
+    language: str = "ja",
+    phase_errors: dict[str, str] | None = None,
+) -> tuple[AgentReport | None, TradingDecision | None, list[str]]:
+    """Run Phase 3: trader decision + Phase 3.5: verifier + Phase 3.6: MALT refine."""
     decision_report: AgentReport | None = None
     decision: TradingDecision | None = None
     verifier_feedback: list[str] = []
@@ -119,37 +224,11 @@ async def run_analysis(code: str, config: Config) -> AnalysisResult:
             decision = await _refine_decision(
                 llm, decision, verifier_feedback, data_summary, language=language
             )
-    except Exception as e:
+    except (OpenAIError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
         logger.warning(f"Trader/verifier phase failed, proceeding without decision: {e}")
-
-    # Phase 4: Risk review (only if we have a trader decision to review)
-    risk_review: RiskReview | None = None
-    if decision_report is not None:
-        try:
-            logger.info("Running risk manager...")
-            risk_report = await _run_risk_manager(
-                llm, decision_report, analyst_reports, data, language=language
-            )
-            risk_review = _parse_risk_review(risk_report)
-        except Exception as e:
-            logger.warning(f"Risk manager phase failed: {e}")
-
-    # Find company name from data
-    company_name = None
-    if data.get("statements"):
-        company_name = data["statements"].get("company_name")
-
-    return AnalysisResult(
-        code=code,
-        company_name=company_name,
-        analyst_reports=analyst_reports,
-        debate=debate,
-        decision=decision,
-        risk_review=risk_review,
-        sources_used=sources_used,
-        model=config.model,
-        raw_data={k: v for k, v in data.items() if k != "code"},
-    )
+        if phase_errors is not None:
+            phase_errors["decision"] = str(e)
+    return decision_report, decision, verifier_feedback
 
 
 async def _run_analysts(
@@ -259,7 +338,7 @@ def _parse_decision(report: AgentReport) -> TradingDecision:
     try:
         data = json.loads(report.content)
         return TradingDecision(**data)
-    except (json.JSONDecodeError, Exception) as e:
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
         logger.warning(f"Failed to parse trading decision: {e}")
         return TradingDecision(
             action="HOLD",
@@ -332,7 +411,7 @@ async def _refine_decision(
         if updated:
             logger.info("MALT Refine: thesis/reasoning updated")
             return decision.model_copy(update=updated)
-    except Exception as e:
+    except (OpenAIError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
         logger.warning(f"MALT Refine failed, keeping original: {e}")
     return decision
 
@@ -342,7 +421,7 @@ def _parse_risk_review(report: AgentReport) -> RiskReview:
     try:
         data = json.loads(report.content)
         return RiskReview(**data)
-    except (json.JSONDecodeError, Exception) as e:
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
         logger.warning(f"Failed to parse risk review: {e}")
         return RiskReview(
             approved=False,

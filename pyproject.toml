@@ -1,6 +1,6 @@
 [project]
 name = "japan-trading-agents"
-version = "0.5.2"
+version = "0.5.3"
 description = "Multi-agent AI trading analysis for Japanese stocks — powered by the Japan Finance Data Stack"
 readme = "README.md"
 license = "Apache-2.0"

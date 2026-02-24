@@ -59,8 +59,6 @@ _LABELS: dict[str, dict[str, str]] = {
         "header_note": "**重要: key_factsの出典は必ずこの一覧から引用すること。一覧にない数値・事実の引用は禁止。**",
         "edinet_section": "### EDINET財務データ",
         "edinet_source_note": "出典ラベル:",
-        "boj_section": "### 日本銀行データ (BOJ)",
-        "boj_source_note": "出典ラベル:",
         "tdnet_section": "### 適時開示 (TDNET)",
         "tdnet_source_note": "出典ラベル: `TDNET YYYY-MM-DD` ※開示タイトルのみ引用可。TDNETは財務数値を持たない。",
         "tdnet_source_prefix": "出典: TDNET",
@@ -99,8 +97,6 @@ _LABELS: dict[str, dict[str, str]] = {
         "header_note": "**IMPORTANT: key_facts must cite ONLY values from this list. Citing figures not present here is prohibited.**",
         "edinet_section": "### EDINET Financial Data",
         "edinet_source_note": "Source label:",
-        "boj_section": "### Bank of Japan Data (BOJ)",
-        "boj_source_note": "Source label:",
         "tdnet_section": "### Timely Disclosures (TDNET)",
         "tdnet_source_note": "Source label: `TDNET YYYY-MM-DD` — only disclosure titles may be cited; TDNET contains no financial figures.",
         "tdnet_source_prefix": "Source: TDNET",
@@ -146,150 +142,168 @@ def _get_sector_interp_note(sector: str, language: str) -> str:
     return ""
 
 
+def _build_stock_price_section(sp: dict, code: str, labels: dict) -> list[str]:
+    """Build the stock-price portion of the verified data summary."""
+    lines: list[str] = []
+    price_date = sp.get("date", "today")
+    ticker = sp.get("ticker", f"{code}.T")
+    label = f"yfinance {price_date}"
+    lines.append(f"{labels['price_section']} ({ticker})")
+    lines.append(f"{labels['price_source_note']} `{label}`")
+    close = sp.get("close")
+    lines.append(
+        f"- {labels['close']}: ¥{close:,.0f}"
+        if close
+        else f"- {labels['close']}: ¥{sp.get('close', '?')}"
+    )
+    lines.append(f"- {labels['high']}: ¥{sp.get('high', '?')}")
+    lines.append(f"- {labels['low']}: ¥{sp.get('low', '?')}")
+    w52h = sp.get("week52_high")
+    w52l = sp.get("week52_low")
+    if w52h and w52l:
+        lines.append(f"- {labels['week52_high']}: ¥{w52h:,.0f}")
+        lines.append(f"- {labels['week52_low']}: ¥{w52l:,.0f}")
+        if close and w52h > w52l:
+            pct = (close - w52l) / (w52h - w52l) * 100
+            lines.append("- " + labels["range_pct"].format(pct=pct))
+    vol = sp.get("volume")
+    lines.append(f"- {labels['volume']}: {vol:,}" if vol else f"- {labels['volume']}: N/A")
+    if avg30 := sp.get("avg_volume_30d"):
+        lines.append(f"- {labels['avg_vol_30']}: {avg30:,.0f}")
+    if avg90 := sp.get("avg_volume_90d"):
+        lines.append(f"- {labels['avg_vol_90']}: {avg90:,.0f}")
+    if pe := sp.get("trailing_pe"):
+        lines.append(f"- {labels['pe_trailing']}: {pe:.1f}x")
+    if pe_fwd := sp.get("forward_pe"):
+        lines.append(f"- {labels['pe_forward']}: {pe_fwd:.1f}x")
+    if pb := sp.get("price_to_book"):
+        lines.append(f"- {labels['pbr']}: {pb:.2f}x")
+    if mcap := sp.get("market_cap"):
+        lines.append("- " + labels["market_cap"].format(value=mcap / 1e8))
+    if sector := sp.get("sector"):
+        lines.append(f"- {labels['sector']}: {sector}")
+    if eps := sp.get("trailing_eps"):
+        lines.append(f"- {labels['eps']}: ¥{eps:.1f}")
+    if (dy := sp.get("dividend_yield")) and dy > 0:
+        pct = dy * 100  # adapter normalizes to decimal form (0.0256 = 2.56%)
+        if pct < 30:  # sanity: ignore implausible yield (> 30% = data error)
+            lines.append(f"- {labels['div_yield']}: {pct:.2f}%")
+    lines.append("- " + labels["data_period"].format(n=sp.get("total_points", "?")))
+    return lines
+
+
+def _build_edinet_section(
+    statements: dict, code: str, sector: str, labels: dict, language: str,
+) -> list[str]:
+    """Build the EDINET financial-statements portion of the verified data summary."""
+    lines: list[str] = []
+    filing_date = statements.get("filing_date", "unknown")
+    edinet_code = statements.get("edinet_code", "")
+    company_name = statements.get("company_name", code)
+    label = f"EDINET {filing_date}"
+    lines.append(f"{labels['edinet_section']} [{company_name} / {edinet_code}]")
+    lines.append(f"{labels['edinet_source_note']} `{label}`")
+
+    if metrics := statements.get("metrics"):
+        for k, v in metrics.items():
+            if v is not None:
+                lines.append(f"- {k}: {v}")
+
+    # Inject sector interpretation note immediately after EDINET metrics
+    if sector and (note := _get_sector_interp_note(sector, language)):
+        lines.append(note)
+
+    return lines
+
+
+def _build_tdnet_section(disclosures: list, labels: dict) -> list[str]:
+    """Build the TDNET disclosures portion of the verified data summary."""
+    lines: list[str] = []
+    lines.append(labels["tdnet_section"])
+    lines.append(labels["tdnet_source_note"])
+    for d in disclosures[:6]:
+        pub = d.get("pubdate", "?")
+        title = d.get("title", "?")
+        cat = d.get("category", "?")
+        lines.append(f"- {pub}: {title} [{cat}]  [{labels['tdnet_source_prefix']} {pub}]")
+    return lines
+
+
+def _build_fx_section(fx: dict, labels: dict) -> list[str]:
+    """Build the FX-rates portion of the verified data summary."""
+    lines: list[str] = []
+    lines.append(labels["fx_section"])
+    lines.append(labels["fx_source_note"])
+    for pair, rate in fx.get("rates", {}).items():
+        if pair == "USDJPY":
+            lines.append("- " + labels["fx_usd"].format(rate=rate))
+        elif pair == "EURJPY":
+            lines.append("- " + labels["fx_eur"].format(rate=rate))
+    lines.append(labels["fx_note"])
+    return lines
+
+
+def _build_estat_section(macro: list, labels: dict) -> list[str]:
+    """Build the e-Stat government-statistics portion of the verified data summary."""
+    lines: list[str] = []
+    lines.append(labels["estat_section"])
+    lines.append(labels["estat_source_note"])
+    for m in macro[:4]:
+        title = m.get("title", "?")
+        org = m.get("gov_org", "?")
+        survey_date = m.get("survey_date", "?")
+        lines.append(f"- {title} ({org}, {survey_date})")
+    lines.append(labels["estat_warning"])
+    return lines
+
+
+def _build_news_section(news: list, labels: dict) -> list[str]:
+    """Build the news-headlines portion of the verified data summary."""
+    lines: list[str] = []
+    lines.append(labels["news_section"])
+    lines.append(labels["news_source_note"])
+    for news_item in news[:5]:
+        title = news_item.get("title", "?")
+        src_name = news_item.get("source_name", "?")
+        lines.append(f"- [{src_name}] {title}")
+    return lines
+
+
 def build_verified_data_summary(data: dict[str, Any], code: str, language: str = "ja") -> str:
     """Build a source-labeled data summary for downstream agents.
 
     Returns a structured text where every value is tagged with its data source.
     Agents must ONLY cite facts from this summary — no filling in from training data.
     """
-    L = _LABELS.get(language, _LABELS["ja"])
+    labels = _LABELS.get(language, _LABELS["ja"])
 
     # Pre-extract sector for interpretation notes (used after EDINET section)
     sector: str = (data.get("stock_price") or {}).get("sector", "") or ""
 
-    sections: list[str] = [
-        L["header"],
-        L["header_note"],
-        "",
-    ]
+    sections: list[str] = [labels["header"], labels["header_note"], ""]
 
-    # --- EDINET financial statements ---
     if statements := data.get("statements"):
-        filing_date = statements.get("filing_date", "unknown")
-        edinet_code = statements.get("edinet_code", "")
-        company_name = statements.get("company_name", code)
-        label = f"EDINET {filing_date}"
-        sections.append(f"{L['edinet_section']} [{company_name} / {edinet_code}]")
-        sections.append(f"{L['edinet_source_note']} `{label}`")
-
-        if metrics := statements.get("metrics"):
-            for k, v in metrics.items():
-                if v is not None:
-                    sections.append(f"- {k}: {v}")
-
-        # Inject sector interpretation note immediately after EDINET metrics
-        if sector and (note := _get_sector_interp_note(sector, language)):
-            sections.append(note)
-
+        sections.extend(_build_edinet_section(statements, code, sector, labels, language))
         sections.append("")
 
-    # --- BOJ interest rate data ---
-    if boj := data.get("boj"):
-        series_code = boj.get("series_code", "IR01")
-        name = boj.get("name", "基本的貸出利率" if language == "ja" else "Basic Lending Rate")
-        unit = boj.get("unit", "%")
-        label = f"BOJ {series_code}"
-        sections.append(L["boj_section"])
-        sections.append(f"{L['boj_source_note']} `{label}`")
-        if latest := boj.get("latest"):
-            sections.append(f"- {name}: {latest.get('value')} {unit} ({latest.get('date')})")
-        if recent := boj.get("recent"):
-            # Show last 3 data points for trend
-            for obs in recent[-3:]:
-                sections.append(f"  - {obs.get('date')}: {obs.get('value')} {unit}")
-        sections.append("")
-
-    # --- TDNET disclosures (events only, no financial values) ---
     if disclosures := data.get("disclosures"):
-        sections.append(L["tdnet_section"])
-        sections.append(L["tdnet_source_note"])
-        for d in disclosures[:6]:
-            pub = d.get("pubdate", "?")
-            title = d.get("title", "?")
-            cat = d.get("category", "?")
-            sections.append(f"- {pub}: {title} [{cat}]  [{L['tdnet_source_prefix']} {pub}]")
+        sections.extend(_build_tdnet_section(disclosures, labels))
         sections.append("")
 
-    # --- Stock price (yfinance) ---
     if sp := data.get("stock_price"):
-        price_date = sp.get("date", "today")
-        ticker = sp.get("ticker", f"{code}.T")
-        label = f"yfinance {price_date}"
-        sections.append(f"{L['price_section']} ({ticker})")
-        sections.append(f"{L['price_source_note']} `{label}`")
-        close = sp.get("close")
-        sections.append(
-            f"- {L['close']}: ¥{close:,.0f}"
-            if close
-            else f"- {L['close']}: ¥{sp.get('close', '?')}"
-        )
-        sections.append(f"- {L['high']}: ¥{sp.get('high', '?')}")
-        sections.append(f"- {L['low']}: ¥{sp.get('low', '?')}")
-        w52h = sp.get("week52_high")
-        w52l = sp.get("week52_low")
-        if w52h and w52l:
-            sections.append(f"- {L['week52_high']}: ¥{w52h:,.0f}")
-            sections.append(f"- {L['week52_low']}: ¥{w52l:,.0f}")
-            if close and w52h > w52l:
-                pct = (close - w52l) / (w52h - w52l) * 100
-                sections.append("- " + L["range_pct"].format(pct=pct))
-        vol = sp.get("volume")
-        sections.append(f"- {L['volume']}: {vol:,}" if vol else f"- {L['volume']}: N/A")
-        if avg30 := sp.get("avg_volume_30d"):
-            sections.append(f"- {L['avg_vol_30']}: {avg30:,.0f}")
-        if avg90 := sp.get("avg_volume_90d"):
-            sections.append(f"- {L['avg_vol_90']}: {avg90:,.0f}")
-        if pe := sp.get("trailing_pe"):
-            sections.append(f"- {L['pe_trailing']}: {pe:.1f}x")
-        if pe_fwd := sp.get("forward_pe"):
-            sections.append(f"- {L['pe_forward']}: {pe_fwd:.1f}x")
-        if pb := sp.get("price_to_book"):
-            sections.append(f"- {L['pbr']}: {pb:.2f}x")
-        if mcap := sp.get("market_cap"):
-            sections.append("- " + L["market_cap"].format(value=mcap / 1e8))
-        if sector := sp.get("sector"):
-            sections.append(f"- {L['sector']}: {sector}")
-        if eps := sp.get("trailing_eps"):
-            sections.append(f"- {L['eps']}: ¥{eps:.1f}")
-        if (dy := sp.get("dividend_yield")) and dy > 0:
-            pct = dy * 100  # adapter normalizes to decimal form (0.0256 = 2.56%)
-            if pct < 30:  # sanity: ignore implausible yield (> 30% = data error)
-                sections.append(f"- {L['div_yield']}: {pct:.2f}%")
-        sections.append("- " + L["data_period"].format(n=sp.get("total_points", "?")))
+        sections.extend(_build_stock_price_section(sp, code, labels))
         sections.append("")
 
-    # --- FX rates (yfinance, real-time macro context) ---
     if fx := data.get("fx"):
-        sections.append(L["fx_section"])
-        sections.append(L["fx_source_note"])
-        for pair, rate in fx.get("rates", {}).items():
-            if pair == "USDJPY":
-                sections.append("- " + L["fx_usd"].format(rate=rate))
-            elif pair == "EURJPY":
-                sections.append("- " + L["fx_eur"].format(rate=rate))
-        sections.append(L["fx_note"])
+        sections.extend(_build_fx_section(fx, labels))
         sections.append("")
 
-    # --- e-Stat (table metadata ONLY — no actual economic values) ---
     if macro := data.get("macro"):
-        sections.append(L["estat_section"])
-        sections.append(L["estat_source_note"])
-        for m in macro[:4]:
-            title = m.get("title", "?")
-            org = m.get("gov_org", "?")
-            survey_date = m.get("survey_date", "?")
-            sections.append(f"- {title} ({org}, {survey_date})")
-        sections.append(L["estat_warning"])
+        sections.extend(_build_estat_section(macro, labels))
         sections.append("")
 
-    # --- News (sentiment reference only, no financial values) ---
     if news := data.get("news"):
-        sections.append(L["news_section"])
-        sections.append(L["news_source_note"])
-        for n in news[:5]:
-            title = n.get("title", "?")
-            src_name = n.get("source_name", "?")
-            sections.append(f"- [{src_name}] {title}")
+        sections.extend(_build_news_section(news, labels))
         sections.append("")
 
     return "\n".join(sections)

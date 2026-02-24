@@ -31,7 +31,7 @@ def save_snapshot(
         path = snapshot_path(result.code, snapshot_dir)
         path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
         logger.debug(f"Snapshot saved: {path}")
-    except Exception as e:
+    except (OSError, ValueError) as e:
         logger.warning(f"Failed to save snapshot for {result.code}: {e}")
 
 
@@ -45,9 +45,17 @@ def load_snapshot(
         return None
     try:
         return AnalysisResult.model_validate_json(path.read_text(encoding="utf-8"))
-    except Exception as e:
+    except (OSError, ValueError) as e:
         logger.warning(f"Failed to load snapshot for {code}: {e}")
         return None
+
+
+def _extract_current_price(result: AnalysisResult) -> float | None:
+    """Extract current stock price from raw_data, if available."""
+    stock_price = result.raw_data.get("stock_price") if result.raw_data else None
+    if isinstance(stock_price, dict):
+        return stock_price.get("current_price") or stock_price.get("close")
+    return None
 
 
 def diff_results(old: AnalysisResult, new: AnalysisResult) -> list[str]:
@@ -57,6 +65,8 @@ def diff_results(old: AnalysisResult, new: AnalysisResult) -> list[str]:
     - action (BUY/SELL/HOLD) — highest signal
     - confidence (reported when |delta| >= 15%)
     - risk_review.approved
+    - significant price move (≥5%)
+    - new/removed risk concerns
     """
     changes: list[str] = []
 
@@ -83,11 +93,33 @@ def diff_results(old: AnalysisResult, new: AnalysisResult) -> list[str]:
         arrow = "↑" if conf_delta > 0 else "↓"
         changes.append(f"Conf {arrow} {old_d.confidence:.0%} → {new_d.confidence:.0%}")
 
+    # Significant price move (≥5%)
+    old_price = _extract_current_price(old)
+    new_price = _extract_current_price(new)
+    if old_price and new_price and old_price > 0:
+        pct = (new_price - old_price) / old_price * 100
+        if abs(pct) >= 5.0:
+            arrow = "📈" if pct > 0 else "📉"
+            changes.append(
+                f"{arrow} ¥{old_price:,.0f} → ¥{new_price:,.0f} ({pct:+.1f}%)"
+            )
+
     # Risk approval flip
     old_r = old.risk_review
     new_r = new.risk_review
     if old_r is not None and new_r is not None and old_r.approved != new_r.approved:
         status = "Approved ✅" if new_r.approved else "Rejected ❌"
         changes.append(f"Risk: {status}")
+
+    # New/removed risk concerns
+    if old_r is not None and new_r is not None:
+        old_concerns = set(old_r.concerns)
+        new_concerns = set(new_r.concerns)
+        added = new_concerns - old_concerns
+        removed = old_concerns - new_concerns
+        for c in sorted(added):
+            changes.append(f"🚩 +Risk: {c}")
+        for c in sorted(removed):
+            changes.append(f"✅ -Risk: {c}")
 
     return changes

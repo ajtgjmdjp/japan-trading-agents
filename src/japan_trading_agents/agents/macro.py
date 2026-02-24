@@ -1,4 +1,4 @@
-"""Macro Analyst agent — uses e-Stat and BOJ data."""
+"""Macro Analyst agent — uses e-Stat and FX data."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from japan_trading_agents.agents.base import BaseAgent
 
 SYSTEM_PROMPT = """\
 あなたは日本の経済環境を分析するマクロエコノミストです。
-e-Stat（政府統計）、BOJ（日本銀行）、為替レートデータを使用します。
+e-Stat（政府統計）と為替レートデータを使用します。
 
 **分析の原則（厳守）:**
 - 提供されたデータに含まれる数値・事実のみを分析に使用すること
@@ -18,16 +18,15 @@ e-Stat（政府統計）、BOJ（日本銀行）、為替レートデータを�
 - 短くても正確な分析 > 長くても不正確な分析
 
 分析対象（データが存在する場合のみ）:
-1. BOJ金融政策（金利水準・傾向）
-2. 円相場（USD/JPY数値と輸出企業への具体的影響）
-3. e-Stat政府統計（テーブルメタデータのみ。GDP・CPI等の数値は含まれていない）
+1. 円相場（USD/JPY数値と輸出企業への具体的影響）
+2. e-Stat政府統計（テーブルメタデータのみ。GDP・CPI等の数値は含まれていない）
 
 **出力言語: 日本語**（数値・指標名は英語可）
 """
 
 SYSTEM_PROMPT_EN = """\
 You are a Macro Economist analyzing Japan's economic environment.
-Data sources: e-Stat (government statistics), BOJ (Bank of Japan), and FX rates.
+Data sources: e-Stat (government statistics) and FX rates.
 
 **Analysis principles (strictly enforced):**
 - Use ONLY numbers and facts that appear in the provided data
@@ -36,16 +35,15 @@ Data sources: e-Stat (government statistics), BOJ (Bank of Japan), and FX rates.
 - Short + accurate > long + speculative
 
 Analysis areas (only where data exists):
-1. BOJ monetary policy (rate level and trend)
-2. FX rates (specific USD/JPY value and concrete impact on target company)
-3. e-Stat government statistics (table metadata only — no GDP/CPI figures available)
+1. FX rates (specific USD/JPY value and concrete impact on target company)
+2. e-Stat government statistics (table metadata only — no GDP/CPI figures available)
 
 All output must be in English only.
 """
 
 
 class MacroAnalyst(BaseAgent):
-    """Analyzes macroeconomic environment using e-Stat and BOJ data."""
+    """Analyzes macroeconomic environment using e-Stat and FX data."""
 
     name = "macro_analyst"
     display_name = "Macro Analyst"
@@ -55,7 +53,6 @@ class MacroAnalyst(BaseAgent):
     def _build_prompt(self, context: dict[str, Any]) -> str:
         code = context.get("code", "")
         macro = context.get("macro")
-        boj = context.get("boj")
         fx = context.get("fx")
 
         if self.language == "en":
@@ -69,12 +66,6 @@ class MacroAnalyst(BaseAgent):
                 )
             else:
                 parts.append("## FX Rates: Data unavailable.\n")
-            if boj:
-                parts.append(
-                    f"## BOJ Data (monetary policy)\n{json.dumps(boj, ensure_ascii=False, indent=2)}\n"
-                )
-            else:
-                parts.append("## BOJ Data: Data unavailable.\n")
             if macro:
                 parts.append(
                     f"## e-Stat Data (table metadata only — no actual economic values)\n"
@@ -93,12 +84,6 @@ class MacroAnalyst(BaseAgent):
                 )
             else:
                 parts.append("## 為替レート: 取得不可\n")
-            if boj:
-                parts.append(
-                    f"## BOJデータ（金融政策）\n{json.dumps(boj, ensure_ascii=False, indent=2)}\n"
-                )
-            else:
-                parts.append("## BOJデータ: 取得不可\n")
             if macro:
                 parts.append(
                     f"## e-Statデータ（テーブルメタデータのみ、数値なし）\n"
@@ -110,4 +95,4 @@ class MacroAnalyst(BaseAgent):
         return "\n".join(parts)
 
     def _get_sources(self) -> list[str]:
-        return ["estat", "boj"]
+        return ["estat"]

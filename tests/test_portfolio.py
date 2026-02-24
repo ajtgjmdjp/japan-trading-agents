@@ -10,42 +10,9 @@ from click.testing import CliRunner
 from japan_trading_agents.cli import cli
 from japan_trading_agents.config import Config
 from japan_trading_agents.graph import run_portfolio
-from japan_trading_agents.models import AnalysisResult, PortfolioResult, TradingDecision
+from japan_trading_agents.models import PortfolioResult
 from japan_trading_agents.notifier import _format_portfolio_message
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_result(
-    code: str,
-    action: str = "HOLD",
-    confidence: float = 0.6,
-    company: str | None = None,
-    approved: bool = True,
-) -> AnalysisResult:
-    from japan_trading_agents.models import RiskReview
-
-    decision = TradingDecision(
-        action=action,  # type: ignore[arg-type]
-        confidence=confidence,
-        reasoning="Test reasoning",
-        thesis="Test thesis",
-        target_price=3000.0,
-        stop_loss=2700.0,
-    )
-    risk = RiskReview(approved=approved, reasoning="OK", concerns=[])
-    return AnalysisResult(
-        code=code,
-        company_name=company,
-        decision=decision,
-        risk_review=risk,
-        analyst_reports=[],
-        sources_used=["statements"],
-        model="gpt-4o-mini",
-    )
-
+from tests.conftest import make_result
 
 # ---------------------------------------------------------------------------
 # PortfolioResult model
@@ -54,9 +21,9 @@ def _make_result(
 
 def test_portfolio_result_buy_hold_sell_partition() -> None:
     results = [
-        _make_result("7203", "BUY", 0.8),
-        _make_result("8306", "HOLD", 0.6),
-        _make_result("4502", "SELL", 0.55),
+        make_result("7203", "BUY", 0.8),
+        make_result("8306", "HOLD", 0.6),
+        make_result("4502", "SELL", 0.55),
     ]
     portfolio = PortfolioResult(
         codes=["7203", "8306", "4502"], results=results, model="gpt-4o-mini"
@@ -77,7 +44,7 @@ def test_portfolio_result_empty() -> None:
 def test_portfolio_result_failed_codes() -> None:
     portfolio = PortfolioResult(
         codes=["7203", "9999"],
-        results=[_make_result("7203", "BUY")],
+        results=[make_result("7203", "BUY")],
         failed_codes=["9999"],
         model="gpt-4o-mini",
     )
@@ -227,8 +194,8 @@ async def test_run_portfolio_concurrency_limit(
 
 def test_format_portfolio_message_basic() -> None:
     results = [
-        _make_result("7203", "BUY", 0.78, company="トヨタ"),
-        _make_result("8306", "HOLD", 0.60, company="三菱UFJ"),
+        make_result("7203", "BUY", 0.78, company_name="トヨタ"),
+        make_result("8306", "HOLD", 0.60, company_name="三菱UFJ"),
     ]
     portfolio = PortfolioResult(codes=["7203", "8306"], results=results, model="gpt-4o-mini")
     msg = _format_portfolio_message(portfolio)
@@ -240,7 +207,7 @@ def test_format_portfolio_message_basic() -> None:
 
 
 def test_format_portfolio_message_with_failed() -> None:
-    results = [_make_result("7203", "BUY")]
+    results = [make_result("7203", "BUY")]
     portfolio = PortfolioResult(
         codes=["7203", "9999"],
         results=results,

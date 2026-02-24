@@ -68,6 +68,7 @@ class AnalysisResult(BaseModel):
     model: str = "gpt-4o-mini"
     timestamp: datetime = Field(default_factory=datetime.now)
     raw_data: dict[str, Any] = Field(default_factory=dict)
+    phase_errors: dict[str, str] = Field(default_factory=dict)
 
 
 class PortfolioResult(BaseModel):

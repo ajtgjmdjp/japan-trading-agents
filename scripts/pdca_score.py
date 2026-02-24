@@ -9,14 +9,11 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 import sys
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
-
-import unicodedata
-
 
 # ---------------------------------------------------------------------------
 # Scoring helpers
@@ -27,7 +24,6 @@ def _count_jp_chars(text: str) -> int:
     """Count Japanese characters (hiragana, katakana, kanji) in text."""
     count = 0
     for ch in text:
-        cat = unicodedata.category(ch)
         name = unicodedata.name(ch, "")
         if "CJK" in name or "HIRAGANA" in name or "KATAKANA" in name:
             count += 1

@@ -47,6 +47,35 @@ VERIFIER_SYSTEM_PROMPT = """\
 """
 
 
+def _parse_verification_result(
+    result: dict,
+    original_facts: list[KeyFact],
+) -> tuple[list[KeyFact], list[str]]:
+    """Extract verified facts and feedback from the LLM response.
+
+    Returns (original_facts, []) as a safety fallback when the response is empty.
+    """
+    verified_raw = result.get("verified_facts", [])
+    verified_facts = [
+        KeyFact(fact=f["fact"], source=f.get("source", ""))
+        for f in verified_raw
+        if isinstance(f, dict) and f.get("fact")
+    ]
+
+    corrections = result.get("corrections", [])
+    removed = result.get("removed", [])
+    if corrections:
+        logger.info(f"FactVerifier corrections: {corrections}")
+    if removed:
+        logger.info(f"FactVerifier removed hallucinated facts: {removed}")
+
+    if not verified_facts and original_facts:
+        logger.warning("FactVerifier returned empty list — keeping originals")
+        return original_facts, []
+
+    return verified_facts, corrections + removed
+
+
 async def verify_key_facts(
     llm: LLMClient,
     decision: TradingDecision,
@@ -76,27 +105,9 @@ async def verify_key_facts(
 
     try:
         result = await llm.complete_json(VERIFIER_SYSTEM_PROMPT, user_prompt)
-
-        verified_raw = result.get("verified_facts", [])
-        verified_facts = [
-            KeyFact(fact=f["fact"], source=f.get("source", ""))
-            for f in verified_raw
-            if isinstance(f, dict) and f.get("fact")
-        ]
-
-        corrections = result.get("corrections", [])
-        removed = result.get("removed", [])
-        if corrections:
-            logger.info(f"FactVerifier corrections: {corrections}")
-        if removed:
-            logger.info(f"FactVerifier removed hallucinated facts: {removed}")
-
-        # If verifier returns nothing, keep originals (safety fallback)
-        if not verified_facts and decision.key_facts:
-            logger.warning("FactVerifier returned empty list — keeping originals")
-            return decision, []
-
-        feedback = corrections + removed
+        verified_facts, feedback = _parse_verification_result(
+            result, decision.key_facts,
+        )
         return decision.model_copy(update={"key_facts": verified_facts}), feedback
 
     except Exception as e:

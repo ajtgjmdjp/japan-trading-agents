@@ -187,11 +187,10 @@ async def test_macro_analyst_with_data(mock_llm: LLMClient) -> None:
     context = {
         "code": "7203",
         "macro": [{"title": "GDP statistics", "stats_id": "12345"}],
-        "boj": {"name": "rates", "shape": [100, 5]},
     }
     report = await agent.analyze(context)
     assert report.agent_name == "macro_analyst"
-    assert report.data_sources == ["estat", "boj"]
+    assert report.data_sources == ["estat"]
 
 
 async def test_macro_analyst_no_data(mock_llm: LLMClient) -> None:
@@ -310,6 +309,106 @@ async def test_bear_researcher_with_bull_case(mock_llm: LLMClient) -> None:
     await agent.analyze(context)
     call_args = mock_llm.complete.call_args
     assert "counter" in call_args[0][1].lower()
+
+
+# ---------------------------------------------------------------------------
+# _build_researcher_prompt (shared helper)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildResearcherPrompt:
+    """Direct tests for the _build_researcher_prompt helper."""
+
+    def test_empty_reports(self) -> None:
+        """Empty reports list produces header only, no report sections."""
+        from japan_trading_agents.agents.researcher import _build_researcher_prompt
+
+        result = _build_researcher_prompt(
+            code="7203",
+            stance="bullish",
+            reports=[],
+            counter_case=None,
+            counter_label="Bear Case to Counter",
+            rebuttal_instruction="Provide a rebuttal.",
+        )
+        assert "bullish" in result
+        assert "7203" in result
+        assert "## Analyst Reports" in result
+        # No report subsections
+        assert "###" not in result
+        # No rebuttal since counter_case is None
+        assert "rebuttal" not in result.lower()
+
+    def test_mixed_agentreport_and_dict_reports(self) -> None:
+        """Both AgentReport and dict reports are rendered."""
+        from japan_trading_agents.agents.researcher import _build_researcher_prompt
+
+        reports = [
+            AgentReport(
+                agent_name="fundamental",
+                display_name="Fundamental Analyst",
+                content="Strong revenue growth",
+            ),
+            {"display_name": "Technical Analyst", "content": "Bullish crossover"},
+            {"content": "Missing display_name field"},  # falls back to 'Analyst'
+        ]
+        result = _build_researcher_prompt(
+            code="8306",
+            stance="bearish",
+            reports=reports,
+            counter_case=None,
+            counter_label="Bull Case to Challenge",
+            rebuttal_instruction="Challenge the bullish arguments.",
+        )
+        assert "### Fundamental Analyst" in result
+        assert "Strong revenue growth" in result
+        assert "### Technical Analyst" in result
+        assert "Bullish crossover" in result
+        assert "### Analyst" in result  # dict with missing display_name
+        assert "Missing display_name field" in result
+
+    def test_counter_case_agentreport(self) -> None:
+        """AgentReport counter_case appends rebuttal section."""
+        from japan_trading_agents.agents.researcher import _build_researcher_prompt
+
+        counter = AgentReport(
+            agent_name="bear",
+            display_name="Bear Researcher",
+            content="Margins declining rapidly",
+        )
+        result = _build_researcher_prompt(
+            code="7203",
+            stance="bullish",
+            reports=[],
+            counter_case=counter,
+            counter_label="Bear Case to Counter",
+            rebuttal_instruction="Provide a rebuttal to the bearish arguments above.",
+        )
+        assert "## Bear Case to Counter" in result
+        assert "Margins declining rapidly" in result
+        assert "Provide a rebuttal to the bearish arguments above." in result
+
+    def test_counter_case_none_no_rebuttal(self) -> None:
+        """counter_case=None means no rebuttal section is appended."""
+        from japan_trading_agents.agents.researcher import _build_researcher_prompt
+
+        result = _build_researcher_prompt(
+            code="4502",
+            stance="bearish",
+            reports=[
+                AgentReport(
+                    agent_name="test", display_name="Test", content="Some data"
+                ),
+            ],
+            counter_case=None,
+            counter_label="Bull Case to Challenge",
+            rebuttal_instruction="Challenge the bullish arguments above.",
+        )
+        assert "## Bull Case to Challenge" not in result
+        assert "Challenge the bullish arguments above." not in result
+        # Reports should still be present
+        assert "### Test" in result
+        assert "Some data" in result
 
 
 # ---------------------------------------------------------------------------
@@ -485,6 +584,146 @@ async def test_verify_key_facts_llm_failure_returns_original(mock_llm: LLMClient
     )
     verified, feedback = await verify_key_facts(mock_llm, decision, "## データ")
     assert verified is decision
+    assert feedback == []
+
+
+# ---------------------------------------------------------------------------
+# FactVerifier — malformed LLM response edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_parse_verification_result_empty_dict() -> None:
+    """Empty dict (missing all keys) should fall back to original facts."""
+    from japan_trading_agents.agents.verifier import _parse_verification_result
+    from japan_trading_agents.models import KeyFact
+
+    originals = [KeyFact(fact="売上高10兆円", source="EDINET 2024-06-01")]
+    verified, feedback = _parse_verification_result({}, originals)
+    assert verified is originals
+    assert feedback == []
+
+
+def test_parse_verification_result_missing_verified_facts_key() -> None:
+    """JSON with corrections/removed but missing verified_facts."""
+    from japan_trading_agents.agents.verifier import _parse_verification_result
+    from japan_trading_agents.models import KeyFact
+
+    originals = [KeyFact(fact="利益増加", source="EDINET 2024-06-01")]
+    result = {"corrections": ["修正あり"], "removed": ["削除あり"]}
+    verified, feedback = _parse_verification_result(result, originals)
+    # No verified_facts → empty list → falls back to originals
+    assert verified is originals
+    assert feedback == []
+
+
+def test_parse_verification_result_verified_facts_with_bad_entries() -> None:
+    """verified_facts containing non-dict and missing-fact entries are skipped."""
+    from japan_trading_agents.agents.verifier import _parse_verification_result
+    from japan_trading_agents.models import KeyFact
+
+    originals = [KeyFact(fact="原データ", source="EDINET")]
+    result = {
+        "verified_facts": [
+            "not a dict",
+            {"source": "BOJ"},  # missing "fact" key
+            {"fact": "", "source": "BOJ"},  # empty fact string
+            {"fact": "有効なファクト", "source": "BOJ IR01"},
+        ],
+        "corrections": [],
+        "removed": [],
+    }
+    verified, _ = _parse_verification_result(result, originals)
+    assert len(verified) == 1
+    assert verified[0].fact == "有効なファクト"
+    assert verified[0].source == "BOJ IR01"
+
+
+def test_parse_verification_result_verified_facts_missing_source() -> None:
+    """Entry without source key defaults to empty string."""
+    from japan_trading_agents.agents.verifier import _parse_verification_result
+
+    result = {
+        "verified_facts": [{"fact": "GDP成長率"}],
+        "corrections": [],
+        "removed": [],
+    }
+    verified, _ = _parse_verification_result(result, [])
+    assert len(verified) == 1
+    assert verified[0].source == ""
+
+
+async def test_verify_key_facts_llm_returns_empty_dict(mock_llm: LLMClient) -> None:
+    """complete_json returns {} — original facts preserved."""
+    from japan_trading_agents.agents.verifier import verify_key_facts
+    from japan_trading_agents.models import KeyFact, TradingDecision
+
+    mock_llm.complete_json = AsyncMock(return_value={})
+    decision = TradingDecision(
+        action="BUY",
+        confidence=0.7,
+        reasoning="根拠あり",
+        key_facts=[KeyFact(fact="利益増加", source="EDINET 2024-06-01")],
+    )
+    verified, feedback = await verify_key_facts(mock_llm, decision, "## データ")
+    assert verified.key_facts == decision.key_facts
+    assert feedback == []
+
+
+async def test_verify_key_facts_llm_returns_non_json(mock_llm: LLMClient) -> None:
+    """complete_json raises on non-JSON text — original decision returned."""
+    from japan_trading_agents.agents.verifier import verify_key_facts
+    from japan_trading_agents.models import KeyFact, TradingDecision
+
+    mock_llm.complete_json = AsyncMock(
+        side_effect=json.JSONDecodeError("Expecting value", "", 0),
+    )
+    decision = TradingDecision(
+        action="SELL",
+        confidence=0.6,
+        reasoning="弱気",
+        key_facts=[KeyFact(fact="減収", source="EDINET 2024-06-01")],
+    )
+    verified, feedback = await verify_key_facts(mock_llm, decision, "## データ")
+    assert verified is decision
+    assert feedback == []
+
+
+async def test_verify_key_facts_llm_returns_truncated_json(mock_llm: LLMClient) -> None:
+    """complete_json raises on truncated JSON — original decision returned."""
+    from japan_trading_agents.agents.verifier import verify_key_facts
+    from japan_trading_agents.models import KeyFact, TradingDecision
+
+    mock_llm.complete_json = AsyncMock(
+        side_effect=json.JSONDecodeError("Unterminated string", '{"verified_facts": [{"fact": "trun', 30),
+    )
+    decision = TradingDecision(
+        action="HOLD",
+        confidence=0.5,
+        reasoning="判断保留",
+        key_facts=[KeyFact(fact="データ不足", source="yfinance 2024-01-01")],
+    )
+    verified, feedback = await verify_key_facts(mock_llm, decision, "## データ")
+    assert verified is decision
+    assert feedback == []
+
+
+async def test_verify_key_facts_llm_returns_json_missing_keys(mock_llm: LLMClient) -> None:
+    """complete_json returns dict with only corrections — originals preserved."""
+    from japan_trading_agents.agents.verifier import verify_key_facts
+    from japan_trading_agents.models import KeyFact, TradingDecision
+
+    mock_llm.complete_json = AsyncMock(
+        return_value={"corrections": ["ラベル修正"], "removed": ["GDP数値削除"]},
+    )
+    decision = TradingDecision(
+        action="BUY",
+        confidence=0.75,
+        reasoning="ポジティブ",
+        key_facts=[KeyFact(fact="売上高増加", source="EDINET 2024-06-01")],
+    )
+    verified, feedback = await verify_key_facts(mock_llm, decision, "## データ")
+    # Missing verified_facts → empty → falls back to original
+    assert verified.key_facts == decision.key_facts
     assert feedback == []
 
 

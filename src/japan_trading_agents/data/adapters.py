@@ -151,6 +151,57 @@ async def get_news(
 # ---------------------------------------------------------------------------
 
 
+def _build_stock_result(
+    code: str,
+    ticker_symbol: str,
+    hist: Any,
+    info: dict[str, Any],
+) -> dict[str, Any]:
+    """Build stock price result dict from raw yfinance data."""
+    latest = hist.iloc[-1]
+
+    avg_vol_30d = float(hist["Volume"].tail(30).mean()) if len(hist) >= 30 else None
+    avg_vol_90d = float(hist["Volume"].tail(90).mean()) if len(hist) >= 90 else None
+
+    result: dict[str, Any] = {
+        "source": "yfinance",
+        "code": code,
+        "ticker": ticker_symbol,
+        "date": str(hist.index[-1].date()),
+        "close": float(latest["Close"]),
+        "open": float(latest["Open"]),
+        "high": float(latest["High"]),
+        "low": float(latest["Low"]),
+        "volume": int(latest["Volume"]),
+        "avg_volume_30d": int(avg_vol_30d) if avg_vol_30d else None,
+        "avg_volume_90d": int(avg_vol_90d) if avg_vol_90d else None,
+        "total_points": len(hist),
+        "week52_high": float(hist["High"].max()),
+        "week52_low": float(hist["Low"].min()),
+    }
+
+    # Fundamentals from ticker.info (best-effort, not guaranteed for all tickers)
+    for field, key in [
+        ("trailing_pe", "trailingPE"),
+        ("forward_pe", "forwardPE"),
+        ("price_to_book", "priceToBook"),
+        ("market_cap", "marketCap"),
+        ("sector", "sector"),
+        ("trailing_eps", "trailingEps"),
+    ]:
+        val = info.get(key)
+        if val is not None:
+            result[field] = val
+
+    # Dividend yield: yfinance returns decimal (0.0256) for US stocks but may return
+    # percentage (2.56) for Japanese stocks.  Normalize to decimal form.
+    dy_raw = info.get("dividendYield")
+    if isinstance(dy_raw, (int, float)) and dy_raw > 0:
+        result["dividend_yield"] = dy_raw / 100.0 if dy_raw >= 1.0 else dy_raw
+
+    return result
+
+
 async def get_stock_price(
     code: str,
     *,
@@ -179,7 +230,8 @@ async def get_stock_price(
         try:
             raw_info = ticker.info
             info: dict[str, Any] = raw_info if isinstance(raw_info, dict) else {}
-        except Exception:
+        except Exception as e:
+            logger.debug(f"ticker.info failed for {ticker_symbol}: {e}")
             info = {}
         return hist, info
 
@@ -188,48 +240,7 @@ async def get_stock_price(
         if hist.empty:
             logger.warning(f"yfinance returned empty data for {ticker_symbol}")
             return None
-        latest = hist.iloc[-1]
-
-        avg_vol_30d = float(hist["Volume"].tail(30).mean()) if len(hist) >= 30 else None
-        avg_vol_90d = float(hist["Volume"].tail(90).mean()) if len(hist) >= 90 else None
-
-        result: dict[str, Any] = {
-            "source": "yfinance",
-            "code": code,
-            "ticker": ticker_symbol,
-            "date": str(hist.index[-1].date()),
-            "close": float(latest["Close"]),
-            "open": float(latest["Open"]),
-            "high": float(latest["High"]),
-            "low": float(latest["Low"]),
-            "volume": int(latest["Volume"]),
-            "avg_volume_30d": int(avg_vol_30d) if avg_vol_30d else None,
-            "avg_volume_90d": int(avg_vol_90d) if avg_vol_90d else None,
-            "total_points": len(hist),
-            "week52_high": float(hist["High"].max()),
-            "week52_low": float(hist["Low"].min()),
-        }
-
-        # Fundamentals from ticker.info (best-effort, not guaranteed for all tickers)
-        for field, key in [
-            ("trailing_pe", "trailingPE"),
-            ("forward_pe", "forwardPE"),
-            ("price_to_book", "priceToBook"),
-            ("market_cap", "marketCap"),
-            ("sector", "sector"),
-            ("trailing_eps", "trailingEps"),
-        ]:
-            val = info.get(key)
-            if val is not None:
-                result[field] = val
-
-        # Dividend yield: yfinance returns decimal (0.0256) for US stocks but may return
-        # percentage (2.56) for Japanese stocks.  Normalize to decimal form.
-        dy_raw = info.get("dividendYield")
-        if isinstance(dy_raw, (int, float)) and dy_raw > 0:
-            result["dividend_yield"] = dy_raw / 100.0 if dy_raw >= 1.0 else dy_raw
-
-        return result
+        return _build_stock_result(code, ticker_symbol, hist, info)
     except Exception as e:
         logger.warning(f"yfinance fetch failed for {ticker_symbol}: {e}")
         return None
@@ -292,8 +303,8 @@ async def get_exchange_rates() -> dict[str, Any] | None:
                 hist = t.history(period="5d")
                 if not hist.empty:
                     result[name] = float(hist["Close"].iloc[-1])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"FX rate fetch failed for {name} ({ticker_sym}): {e}")
         return result
 
     try:
