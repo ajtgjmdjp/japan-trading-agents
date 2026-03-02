@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from yfinance_mcp import FxRates, StockPrice
+
 from japan_trading_agents.data import adapters
 
 # ---------------------------------------------------------------------------
@@ -35,9 +37,8 @@ def test_check_all_available(mock_avail: MagicMock) -> None:
 @patch.object(adapters, "_is_available", return_value=False)
 def test_check_none_available(mock_avail: MagicMock) -> None:
     result = adapters.check_available_sources()
-    # stock_price (yfinance) is always True; optional MCP sources are False
-    assert result["stock_price"] is True
-    assert all(v is False for k, v in result.items() if k != "stock_price")
+    # All should be False — stock_price also uses _is_available("yfinance_mcp")
+    assert all(v is False for v in result.values())
 
 
 # ---------------------------------------------------------------------------
@@ -69,36 +70,51 @@ async def test_get_news_not_installed(mock_avail: MagicMock) -> None:
     assert result == []
 
 
-async def test_get_stock_price_yfinance_empty(mock_avail: MagicMock | None = None) -> None:
-    """Returns None when yfinance returns empty DataFrame."""
-    import pandas as pd
+# ---------------------------------------------------------------------------
+# Stock price adapter (now delegates to YfinanceClient)
+# ---------------------------------------------------------------------------
 
-    mock_ticker = MagicMock()
-    mock_ticker.history.return_value = pd.DataFrame()
-    with patch("yfinance.Ticker", return_value=mock_ticker):
+_SAMPLE_STOCK = StockPrice(
+    source="yfinance",
+    code="7203",
+    ticker="7203.T",
+    date="2024-01-15",
+    close=2550.0,
+    open=2500.0,
+    high=2600.0,
+    low=2480.0,
+    volume=1000000,
+    week52_high=2600.0,
+    week52_low=2450.0,
+    trailing_pe=12.5,
+    price_to_book=1.1,
+    sector="Consumer Cyclical",
+)
+
+
+def _mock_yf_client(
+    stock_return: StockPrice | None = _SAMPLE_STOCK,
+    fx_return: FxRates | None = None,
+) -> MagicMock:
+    """Create a mock YfinanceClient with configurable return values."""
+    client = MagicMock()
+    client.get_stock_price = AsyncMock(return_value=stock_return)
+    client.get_fx_rates = AsyncMock(return_value=fx_return)
+    return client
+
+
+async def test_get_stock_price_returns_none() -> None:
+    """Returns None when YfinanceClient returns None."""
+    mock_client = _mock_yf_client(stock_return=None)
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
         result = await adapters.get_stock_price("7203")
     assert result is None
 
 
-async def test_get_stock_price_yfinance_success() -> None:
-    """Returns dict with stock data on success, including 52-week high/low."""
-    import pandas as pd
-
-    dates = pd.to_datetime(["2024-01-14", "2024-01-15"])
-    hist = pd.DataFrame(
-        {
-            "Open": [2490.0, 2500.0],
-            "High": [2550.0, 2600.0],
-            "Low": [2450.0, 2480.0],
-            "Close": [2530.0, 2550.0],
-            "Volume": [900000, 1000000],
-        },
-        index=dates,
-    )
-    mock_ticker = MagicMock()
-    mock_ticker.history.return_value = hist
-    mock_ticker.info = {"trailingPE": 12.5, "priceToBook": 1.1, "sector": "Consumer Cyclical"}
-    with patch("yfinance.Ticker", return_value=mock_ticker):
+async def test_get_stock_price_success() -> None:
+    """Returns dict with stock data on success, including fundamentals."""
+    mock_client = _mock_yf_client()
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
         result = await adapters.get_stock_price("7203")
     assert result is not None
     assert result["source"] == "yfinance"
@@ -112,84 +128,71 @@ async def test_get_stock_price_yfinance_success() -> None:
     assert result["sector"] == "Consumer Cyclical"
 
 
-async def test_get_stock_price_info_failure_graceful() -> None:
-    """Returns dict even when ticker.info raises an exception."""
-    import pandas as pd
-
-    dates = pd.to_datetime(["2024-01-15"])
-    hist = pd.DataFrame(
-        {
-            "Open": [2500.0],
-            "High": [2600.0],
-            "Low": [2480.0],
-            "Close": [2550.0],
-            "Volume": [1000000],
-        },
-        index=dates,
+async def test_get_stock_price_no_fundamentals() -> None:
+    """Returns dict even without fundamentals (None fields)."""
+    sp = StockPrice(
+        source="yfinance",
+        code="7203",
+        ticker="7203.T",
+        date="2024-01-15",
+        close=2550.0,
+        open=2500.0,
+        high=2600.0,
+        low=2480.0,
+        volume=1000000,
+        week52_high=2600.0,
+        week52_low=2480.0,
     )
-    mock_ticker = MagicMock()
-    mock_ticker.history.return_value = hist
-    mock_ticker.info = None  # simulate failure case; non-dict is handled gracefully
-    with patch("yfinance.Ticker", return_value=mock_ticker):
+    mock_client = _mock_yf_client(stock_return=sp)
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
         result = await adapters.get_stock_price("7203")
     assert result is not None
-    assert result["week52_high"] == 2600.0
-    assert "trailing_pe" not in result
+    assert result["close"] == 2550.0
+    assert result["trailing_pe"] is None
+    assert result["sector"] is None
 
 
-async def test_get_stock_price_yfinance_error() -> None:
-    """Returns None on exception."""
-    with patch("yfinance.Ticker", side_effect=RuntimeError("network error")):
+async def test_get_stock_price_exception() -> None:
+    """Returns None on exception from client."""
+    mock_client = MagicMock()
+    mock_client.get_stock_price = AsyncMock(side_effect=RuntimeError("network error"))
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
         result = await adapters.get_stock_price("7203")
     assert result is None
 
 
-async def test_get_stock_price_info_raises_attribute_error() -> None:
-    """ticker.info raising AttributeError is caught; result still returned with empty info."""
-    import pandas as pd
+async def test_get_stock_price_passes_dates() -> None:
+    """Passes start_date and end_date to the client."""
+    from datetime import date
 
-    dates = pd.to_datetime(["2024-01-15"])
-    hist = pd.DataFrame(
-        {
-            "Open": [2500.0],
-            "High": [2600.0],
-            "Low": [2480.0],
-            "Close": [2550.0],
-            "Volume": [1000000],
-        },
-        index=dates,
+    mock_client = _mock_yf_client()
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
+        await adapters.get_stock_price(
+            "7203",
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 6, 30),
+        )
+    mock_client.get_stock_price.assert_called_once_with(
+        "7203",
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 6, 30),
     )
-    mock_ticker = MagicMock()
-    mock_ticker.history.return_value = hist
-    # Make .info property raise AttributeError (hits the except branch, not isinstance)
-    type(mock_ticker).info = property(lambda self: (_ for _ in ()).throw(AttributeError("no info")))
-    with patch("yfinance.Ticker", return_value=mock_ticker):
-        result = await adapters.get_stock_price("7203")
-    assert result is not None
-    assert result["close"] == 2550.0
-    # No fundamentals should be present since info raised
-    assert "trailing_pe" not in result
-    assert "sector" not in result
 
 
 # ---------------------------------------------------------------------------
-# get_exchange_rates
+# Exchange rate adapter (now delegates to YfinanceClient)
 # ---------------------------------------------------------------------------
+
+_SAMPLE_FX = FxRates(
+    source="yfinance_fx",
+    rates={"USDJPY": 149.0, "EURJPY": 162.0},
+)
 
 
 async def test_get_exchange_rates_success() -> None:
     """Returns dict with FX rates on success."""
-    import pandas as pd
-
-    dates = pd.to_datetime(["2024-01-13", "2024-01-14", "2024-01-15"])
-
-    def _make_ticker(symbol: str) -> MagicMock:
-        t = MagicMock()
-        close_map = {"USDJPY=X": [148.0, 148.5, 149.0], "EURJPY=X": [161.0, 161.5, 162.0]}
-        t.history.return_value = pd.DataFrame({"Close": close_map[symbol]}, index=dates)
-        return t
-
-    with patch("yfinance.Ticker", side_effect=_make_ticker):
+    mock_client = _mock_yf_client(fx_return=_SAMPLE_FX)
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
         result = await adapters.get_exchange_rates()
     assert result is not None
     assert result["source"] == "yfinance_fx"
@@ -197,56 +200,40 @@ async def test_get_exchange_rates_success() -> None:
     assert result["rates"]["EURJPY"] == 162.0
 
 
-async def test_get_exchange_rates_empty_dataframe() -> None:
-    """Returns None when all pairs return empty DataFrames."""
-    import pandas as pd
-
-    mock_ticker = MagicMock()
-    mock_ticker.history.return_value = pd.DataFrame()
-    with patch("yfinance.Ticker", return_value=mock_ticker):
+async def test_get_exchange_rates_returns_none() -> None:
+    """Returns None when client returns None (all pairs failed)."""
+    mock_client = _mock_yf_client(fx_return=None)
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
         result = await adapters.get_exchange_rates()
     assert result is None
 
 
-async def test_get_exchange_rates_individual_pair_exception() -> None:
-    """Returns partial result when one pair raises, the other succeeds."""
-    import pandas as pd
-
-    dates = pd.to_datetime(["2024-01-15"])
-    call_count = 0
-
-    def _make_ticker(symbol: str) -> MagicMock:
-        nonlocal call_count
-        call_count += 1
-        t = MagicMock()
-        if symbol == "USDJPY=X":
-            t.history.side_effect = RuntimeError("network error")
-        else:
-            t.history.return_value = pd.DataFrame({"Close": [162.0]}, index=dates)
-        return t
-
-    with patch("yfinance.Ticker", side_effect=_make_ticker):
+async def test_get_exchange_rates_partial() -> None:
+    """Returns partial rates when some pairs succeed."""
+    partial_fx = FxRates(source="yfinance_fx", rates={"EURJPY": 162.0})
+    mock_client = _mock_yf_client(fx_return=partial_fx)
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
         result = await adapters.get_exchange_rates()
     assert result is not None
     assert "EURJPY" in result["rates"]
     assert "USDJPY" not in result["rates"]
 
 
-async def test_get_exchange_rates_all_pairs_exception() -> None:
-    """Returns None when all pair fetches raise exceptions."""
-    mock_ticker = MagicMock()
-    mock_ticker.history.side_effect = RuntimeError("network error")
-    with patch("yfinance.Ticker", return_value=mock_ticker):
+async def test_get_exchange_rates_exception() -> None:
+    """Returns None on exception from client."""
+    mock_client = MagicMock()
+    mock_client.get_fx_rates = AsyncMock(side_effect=RuntimeError("network error"))
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
         result = await adapters.get_exchange_rates()
     assert result is None
 
 
-async def test_get_exchange_rates_outer_exception() -> None:
-    """Returns None when asyncio.to_thread raises."""
-    with patch("yfinance.Ticker", side_effect=RuntimeError("import failure")):
-        # The RuntimeError propagates from _fetch through to_thread, caught by outer except
-        result = await adapters.get_exchange_rates()
-    assert result is None
+async def test_get_exchange_rates_passes_pairs() -> None:
+    """Passes pairs=["USDJPY", "EURJPY"] to the client."""
+    mock_client = _mock_yf_client(fx_return=_SAMPLE_FX)
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
+        await adapters.get_exchange_rates()
+    mock_client.get_fx_rates.assert_called_once_with(pairs=["USDJPY", "EURJPY"])
 
 
 @patch.object(adapters, "_is_available", return_value=False)
@@ -262,25 +249,24 @@ async def test_get_estat_data_not_installed(mock_avail: MagicMock) -> None:
 
 @patch.object(adapters, "_is_available", return_value=False)
 async def test_fetch_all_data_none_available(mock_avail: MagicMock) -> None:
-    import pandas as pd
-
-    mock_ticker = MagicMock()
-    mock_ticker.history.return_value = pd.DataFrame()
-    with patch("yfinance.Ticker", return_value=mock_ticker):
+    mock_client = _mock_yf_client(stock_return=None, fx_return=None)
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
         result = await adapters.fetch_all_data("7203", timeout=5.0)
     # Should have keys for non-edinet sources (no edinet_code provided)
     assert "disclosures" in result
     assert "stock_price" in result
     assert "news" in result
     assert "macro" in result
-    # All values should be None or empty (yfinance mocked to return empty)
+    # All values should be None or empty
     for v in result.values():
         assert v is None or v == []
 
 
 @patch.object(adapters, "_is_available", return_value=False)
 async def test_fetch_all_data_with_edinet_code(mock_avail: MagicMock) -> None:
-    result = await adapters.fetch_all_data("7203", edinet_code="E02144", timeout=5.0)
+    mock_client = _mock_yf_client(stock_return=None, fx_return=None)
+    with patch.object(adapters, "_get_yf_client", return_value=mock_client):
+        result = await adapters.fetch_all_data("7203", edinet_code="E02144", timeout=5.0)
     assert "statements" in result
 
 
@@ -306,16 +292,13 @@ async def test_get_company_statements_success(mock_avail: MagicMock) -> None:
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
     with (
-        patch("japan_trading_agents.data.adapters.EdinetClient", return_value=mock_client)
-        if False
-        else patch.dict("sys.modules", {"edinet_mcp": MagicMock()}),
+        patch.dict("sys.modules", {"edinet_mcp": MagicMock()}),
         patch(
             "edinet_mcp.EdinetClient",
             return_value=mock_client,
         ),
         patch("edinet_mcp.calculate_metrics", return_value=mock_metrics),
     ):
-        # Re-import to pick up the mocked module
         result = await adapters.get_company_statements("E02144", period="2023")
 
     assert result is not None

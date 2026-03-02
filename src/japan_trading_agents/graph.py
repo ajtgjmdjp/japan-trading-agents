@@ -69,20 +69,33 @@ async def run_analysis(code: str, config: Config) -> AnalysisResult:
 
     # Phase 2: Bull vs Bear debate (graceful degradation)
     debate = await _run_debate_phase(
-        llm, analyst_reports, data, config.debate_rounds, language,
+        llm,
+        analyst_reports,
+        data,
+        config.debate_rounds,
+        language,
         phase_errors=phase_errors,
     )
 
     # Phase 3: Trading decision (with verified data summary)
     data_summary = build_verified_data_summary(data, code, language=language)
     decision_report, decision, _ = await _run_trader_phase(
-        llm, analyst_reports, debate, data, data_summary, language=language,
+        llm,
+        analyst_reports,
+        debate,
+        data,
+        data_summary,
+        language=language,
         phase_errors=phase_errors,
     )
 
     # Phase 4: Risk review
     risk_review = await _run_risk_phase(
-        llm, decision_report, analyst_reports, data, language,
+        llm,
+        decision_report,
+        analyst_reports,
+        data,
+        language,
         phase_errors=phase_errors,
     )
 
@@ -133,9 +146,7 @@ async def _run_data_collection_phase(
             logger.info(f"Resolved EDINET code: {code} -> {edinet_code}")
 
     logger.info(f"Fetching data for {code}...")
-    data = await fetch_all_data(
-        code, edinet_code=edinet_code, timeout=config.task_timeout
-    )
+    data = await fetch_all_data(code, edinet_code=edinet_code, timeout=config.task_timeout)
     data["code"] = code
 
     sources_used = [
@@ -158,9 +169,7 @@ async def _run_debate_phase(
     """Phase 2: Bull vs Bear debate with graceful degradation."""
     try:
         logger.info("Running bull/bear debate...")
-        return await _run_debate(
-            llm, analyst_reports, data, rounds, language=language
-        )
+        return await _run_debate(llm, analyst_reports, data, rounds, language=language)
     except (OpenAIError, KeyError, ValueError, TypeError) as e:
         logger.warning(f"Debate phase failed, proceeding without debate: {e}")
         if phase_errors is not None:

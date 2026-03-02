@@ -100,9 +100,7 @@ def diff_results(old: AnalysisResult, new: AnalysisResult) -> list[str]:
         pct = (new_price - old_price) / old_price * 100
         if abs(pct) >= 5.0:
             arrow = "📈" if pct > 0 else "📉"
-            changes.append(
-                f"{arrow} ¥{old_price:,.0f} → ¥{new_price:,.0f} ({pct:+.1f}%)"
-            )
+            changes.append(f"{arrow} ¥{old_price:,.0f} → ¥{new_price:,.0f} ({pct:+.1f}%)")
 
     # Risk approval flip
     old_r = old.risk_review

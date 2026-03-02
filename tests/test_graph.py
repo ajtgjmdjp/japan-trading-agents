@@ -202,9 +202,7 @@ async def test_run_analysis_malt_refine_garbage_json(mock_llm: LLMClient) -> Non
     """MALT refine receiving garbage JSON (no thesis/reasoning keys) preserves original decision."""
     from japan_trading_agents.models import TradingDecision
 
-    mock_llm.complete_json = AsyncMock(
-        return_value={"garbage_key": 123, "not_thesis": "xxx"}
-    )
+    mock_llm.complete_json = AsyncMock(return_value={"garbage_key": 123, "not_thesis": "xxx"})
     decision = TradingDecision(
         action="BUY",
         confidence=0.75,
@@ -387,9 +385,7 @@ async def test_run_analysis_all_phases_fail_graceful(
     mock_fetch.return_value = {"stock_price": {"close": 3000}}
 
     async def always_fail(**kwargs: object) -> MagicMock:
-        raise APIConnectionError(
-            message="LLM unavailable", model="test", llm_provider="test"
-        )
+        raise APIConnectionError(message="LLM unavailable", model="test", llm_provider="test")
 
     with patch("japan_trading_agents.llm.litellm.acompletion", side_effect=always_fail):
         config = Config(model="gpt-4o-mini")
@@ -412,9 +408,7 @@ async def test_run_analysis_phase_errors_populated(
     mock_fetch.return_value = {"stock_price": {"close": 3000}}
 
     async def always_fail(**kwargs: object) -> MagicMock:
-        raise APIConnectionError(
-            message="LLM unavailable", model="test", llm_provider="test"
-        )
+        raise APIConnectionError(message="LLM unavailable", model="test", llm_provider="test")
 
     with patch("japan_trading_agents.llm.litellm.acompletion", side_effect=always_fail):
         config = Config(model="gpt-4o-mini")
@@ -808,39 +802,47 @@ async def test_e2e_full_pipeline_with_intermediate_state(
     }
 
     # --- LLM mock with phase-specific responses ---
-    trader_decision = json.dumps({
-        "action": "BUY",
-        "confidence": 0.80,
-        "reasoning": "Strong fundamentals with revenue growth",
-        "thesis": "Revenue of 1T yen supports upside potential",
-        "key_facts": [
-            {"fact": "Revenue: 1,000,000M", "source": "EDINET 2025-06-30"},
-            {"fact": "GDP growth 1.8%", "source": "e-Stat"},
-        ],
-        "target_price": 1800,
-        "stop_loss": 1300,
-        "position_size": "medium",
-    })
+    trader_decision = json.dumps(
+        {
+            "action": "BUY",
+            "confidence": 0.80,
+            "reasoning": "Strong fundamentals with revenue growth",
+            "thesis": "Revenue of 1T yen supports upside potential",
+            "key_facts": [
+                {"fact": "Revenue: 1,000,000M", "source": "EDINET 2025-06-30"},
+                {"fact": "GDP growth 1.8%", "source": "e-Stat"},
+            ],
+            "target_price": 1800,
+            "stop_loss": 1300,
+            "position_size": "medium",
+        }
+    )
 
-    risk_review_json = json.dumps({
-        "approved": True,
-        "concerns": ["Technology sector volatility", "FX exposure"],
-        "max_position_pct": 3.0,
-        "reasoning": "Risk within acceptable bounds",
-    })
+    risk_review_json = json.dumps(
+        {
+            "approved": True,
+            "concerns": ["Technology sector volatility", "FX exposure"],
+            "max_position_pct": 3.0,
+            "reasoning": "Risk within acceptable bounds",
+        }
+    )
 
-    verifier_response = json.dumps({
-        "verified_facts": [
-            {"fact": "Revenue: 1,000,000M", "source": "EDINET 2025-06-30"},
-        ],
-        "corrections": [],
-        "removed": ["GDP growth 1.8% — e-Stat has metadata only, no values"],
-    })
+    verifier_response = json.dumps(
+        {
+            "verified_facts": [
+                {"fact": "Revenue: 1,000,000M", "source": "EDINET 2025-06-30"},
+            ],
+            "corrections": [],
+            "removed": ["GDP growth 1.8% — e-Stat has metadata only, no values"],
+        }
+    )
 
-    malt_refine_response = json.dumps({
-        "thesis": "EDINET filing confirms 1T yen revenue",
-        "reasoning": "Verified fundamentals support BUY; macro data unavailable",
-    })
+    malt_refine_response = json.dumps(
+        {
+            "thesis": "EDINET filing confirms 1T yen revenue",
+            "reasoning": "Verified fundamentals support BUY; macro data unavailable",
+        }
+    )
 
     # Track intermediate state via call recording
     phase_sequence: list[str] = []
@@ -996,9 +998,7 @@ async def test_e2e_full_pipeline_with_intermediate_state(
 
 @patch("japan_trading_agents.graph.fetch_all_data", new_callable=AsyncMock)
 @patch("japan_trading_agents.graph.search_companies_edinet", new_callable=AsyncMock)
-async def test_run_analysis_integration(
-    mock_edinet: AsyncMock, mock_fetch: AsyncMock
-) -> None:
+async def test_run_analysis_integration(mock_edinet: AsyncMock, mock_fetch: AsyncMock) -> None:
     """Integration test: full run_analysis pipeline with LLMClient-level mocks.
 
     Mocks LLMClient.complete and complete_json (rather than litellm.acompletion)
@@ -1049,9 +1049,7 @@ async def test_run_analysis_integration(
     }
 
     with (
-        patch.object(
-            LLMClient, "complete", new_callable=AsyncMock, return_value="Analysis text"
-        ),
+        patch.object(LLMClient, "complete", new_callable=AsyncMock, return_value="Analysis text"),
         patch.object(
             LLMClient,
             "complete_json",
@@ -1189,11 +1187,15 @@ class TestRunAnalysisIntegration:
 
         with (
             patch.object(
-                LLMClient, "complete", new_callable=AsyncMock,
+                LLMClient,
+                "complete",
+                new_callable=AsyncMock,
                 return_value="Detailed analyst report",
             ),
             patch.object(
-                LLMClient, "complete_json", new_callable=AsyncMock,
+                LLMClient,
+                "complete_json",
+                new_callable=AsyncMock,
                 side_effect=self._route_complete_json(),
             ),
         ):
@@ -1211,8 +1213,11 @@ class TestRunAnalysisIntegration:
         # -- Phase 1: all 5 analyst reports --
         assert len(result.analyst_reports) == 5
         assert {r.agent_name for r in result.analyst_reports} == {
-            "fundamental_analyst", "macro_analyst", "event_analyst",
-            "sentiment_analyst", "technical_analyst",
+            "fundamental_analyst",
+            "macro_analyst",
+            "event_analyst",
+            "sentiment_analyst",
+            "technical_analyst",
         }
         for r in result.analyst_reports:
             assert isinstance(r, AgentReport)
@@ -1300,11 +1305,15 @@ class TestRunAnalysisIntegration:
 
         with (
             patch.object(
-                LLMClient, "complete", new_callable=AsyncMock,
+                LLMClient,
+                "complete",
+                new_callable=AsyncMock,
                 return_value="Report",
             ),
             patch.object(
-                LLMClient, "complete_json", new_callable=AsyncMock,
+                LLMClient,
+                "complete_json",
+                new_callable=AsyncMock,
                 side_effect=route_json,
             ),
         ):
@@ -1332,11 +1341,15 @@ class TestRunAnalysisIntegration:
 
         with (
             patch.object(
-                LLMClient, "complete", new_callable=AsyncMock,
+                LLMClient,
+                "complete",
+                new_callable=AsyncMock,
                 return_value="English analyst report",
             ),
             patch.object(
-                LLMClient, "complete_json", new_callable=AsyncMock,
+                LLMClient,
+                "complete_json",
+                new_callable=AsyncMock,
                 side_effect=self._route_complete_json(),
             ),
         ):
@@ -1438,40 +1451,48 @@ async def test_run_analysis_to_format_message_integration(
         "fx": {"rates": {"USDJPY": 155.50, "EURJPY": 168.20}},
     }
 
-    trader_decision = json.dumps({
-        "action": "BUY",
-        "confidence": 0.78,
-        "reasoning": "Strong revenue growth and favorable macro",
-        "thesis": "Revenue of 10T yen with expanding EV market share",
-        "key_facts": [
-            {"fact": "Revenue: 10,000,000M", "source": "EDINET 2025-06-30"},
-            {"fact": "GDP growth 2.1%", "source": "e-Stat"},
-        ],
-        "watch_conditions": ["USD/JPY drops below 145", "EV subsidies reduced"],
-        "target_price": 3200,
-        "stop_loss": 2200,
-        "position_size": "medium",
-    })
+    trader_decision = json.dumps(
+        {
+            "action": "BUY",
+            "confidence": 0.78,
+            "reasoning": "Strong revenue growth and favorable macro",
+            "thesis": "Revenue of 10T yen with expanding EV market share",
+            "key_facts": [
+                {"fact": "Revenue: 10,000,000M", "source": "EDINET 2025-06-30"},
+                {"fact": "GDP growth 2.1%", "source": "e-Stat"},
+            ],
+            "watch_conditions": ["USD/JPY drops below 145", "EV subsidies reduced"],
+            "target_price": 3200,
+            "stop_loss": 2200,
+            "position_size": "medium",
+        }
+    )
 
-    risk_review_json = json.dumps({
-        "approved": False,
-        "concerns": ["FX volatility above threshold", "Sector rotation risk"],
-        "max_position_pct": 3.0,
-        "reasoning": "FX exposure exceeds risk limit",
-    })
+    risk_review_json = json.dumps(
+        {
+            "approved": False,
+            "concerns": ["FX volatility above threshold", "Sector rotation risk"],
+            "max_position_pct": 3.0,
+            "reasoning": "FX exposure exceeds risk limit",
+        }
+    )
 
-    verifier_response = json.dumps({
-        "verified_facts": [
-            {"fact": "Revenue: 10,000,000M", "source": "EDINET 2025-06-30"},
-        ],
-        "corrections": [],
-        "removed": ["GDP growth 2.1% — e-Stat has metadata only"],
-    })
+    verifier_response = json.dumps(
+        {
+            "verified_facts": [
+                {"fact": "Revenue: 10,000,000M", "source": "EDINET 2025-06-30"},
+            ],
+            "corrections": [],
+            "removed": ["GDP growth 2.1% — e-Stat has metadata only"],
+        }
+    )
 
-    malt_refine_response = json.dumps({
-        "thesis": "EDINET confirms 10T yen revenue; EV thesis intact",
-        "reasoning": "Verified fundamentals support BUY",
-    })
+    malt_refine_response = json.dumps(
+        {
+            "thesis": "EDINET confirms 10T yen revenue; EV thesis intact",
+            "reasoning": "Verified fundamentals support BUY",
+        }
+    )
 
     async def mock_acompletion(**kwargs: object) -> MagicMock:
         messages = kwargs.get("messages", [])
@@ -1514,9 +1535,9 @@ async def test_run_analysis_to_format_message_integration(
     assert "⚠️ Risk: Rejected" in msg
 
     # Price targets: current price from raw_data.stock_price, target, stop-loss
-    assert "2,580" in msg       # current price
-    assert "3,200" in msg       # target price
-    assert "2,200" in msg       # stop loss
+    assert "2,580" in msg  # current price
+    assert "3,200" in msg  # target price
+    assert "2,200" in msg  # stop loss
 
     # Thesis section (MALT-refined)
     assert "EDINET confirms 10T yen revenue" in msg

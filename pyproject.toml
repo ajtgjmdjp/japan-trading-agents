@@ -28,7 +28,7 @@ dependencies = [
     "rich>=13.0",
     "loguru>=0.7",
     "httpx>=0.27",
-    "yfinance>=0.2",
+    "stockprice-mcp>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -86,8 +86,11 @@ packages = ["japan_trading_agents"]
 mypy_path = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["yfinance", "yfinance.*"]
+module = ["yfinance", "yfinance.*", "yfinance_mcp", "yfinance_mcp.*"]
 ignore_missing_imports = true
+
+[tool.uv.sources]
+stockprice-mcp = { path = "../stockprice-mcp", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

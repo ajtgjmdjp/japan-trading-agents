@@ -10,6 +10,7 @@ the adapter returns None or empty results instead of raising ImportError.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -147,59 +148,21 @@ async def get_news(
 
 
 # ---------------------------------------------------------------------------
-# Stock price adapter
+# Stock price adapter (delegates to stockprice-mcp YfinanceClient)
 # ---------------------------------------------------------------------------
 
+# Shared client instance (created lazily)
+_yf_client: Any = None
 
-def _build_stock_result(
-    code: str,
-    ticker_symbol: str,
-    hist: Any,
-    info: dict[str, Any],
-) -> dict[str, Any]:
-    """Build stock price result dict from raw yfinance data."""
-    latest = hist.iloc[-1]
 
-    avg_vol_30d = float(hist["Volume"].tail(30).mean()) if len(hist) >= 30 else None
-    avg_vol_90d = float(hist["Volume"].tail(90).mean()) if len(hist) >= 90 else None
+def _get_yf_client() -> Any:
+    """Get or create a shared YfinanceClient instance."""
+    global _yf_client
+    if _yf_client is None:
+        from yfinance_mcp import YfinanceClient
 
-    result: dict[str, Any] = {
-        "source": "yfinance",
-        "code": code,
-        "ticker": ticker_symbol,
-        "date": str(hist.index[-1].date()),
-        "close": float(latest["Close"]),
-        "open": float(latest["Open"]),
-        "high": float(latest["High"]),
-        "low": float(latest["Low"]),
-        "volume": int(latest["Volume"]),
-        "avg_volume_30d": int(avg_vol_30d) if avg_vol_30d else None,
-        "avg_volume_90d": int(avg_vol_90d) if avg_vol_90d else None,
-        "total_points": len(hist),
-        "week52_high": float(hist["High"].max()),
-        "week52_low": float(hist["Low"].min()),
-    }
-
-    # Fundamentals from ticker.info (best-effort, not guaranteed for all tickers)
-    for field, key in [
-        ("trailing_pe", "trailingPE"),
-        ("forward_pe", "forwardPE"),
-        ("price_to_book", "priceToBook"),
-        ("market_cap", "marketCap"),
-        ("sector", "sector"),
-        ("trailing_eps", "trailingEps"),
-    ]:
-        val = info.get(key)
-        if val is not None:
-            result[field] = val
-
-    # Dividend yield: yfinance returns decimal (0.0256) for US stocks but may return
-    # percentage (2.56) for Japanese stocks.  Normalize to decimal form.
-    dy_raw = info.get("dividendYield")
-    if isinstance(dy_raw, (int, float)) and dy_raw > 0:
-        result["dividend_yield"] = dy_raw / 100.0 if dy_raw >= 1.0 else dy_raw
-
-    return result
+        _yf_client = YfinanceClient()
+    return _yf_client
 
 
 async def get_stock_price(
@@ -208,41 +171,24 @@ async def get_stock_price(
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> dict[str, Any] | None:
-    """Fetch stock price data from Yahoo Finance via yfinance (TSE: code.T).
+    """Fetch stock price data via stockprice-mcp YfinanceClient (TSE: code.T).
 
     Uses 1-year history by default to compute 52-week high/low.
     Also fetches fundamentals (P/E, P/B, market cap, sector) from ticker.info.
     """
-    import yfinance as yf
-
-    ticker_symbol = f"{code}.T"
-
-    def _fetch() -> tuple[Any, dict[str, Any]]:
-        ticker = yf.Ticker(ticker_symbol)
-        if start_date or end_date:
-            hist = ticker.history(
-                start=str(start_date) if start_date else None,
-                end=str(end_date) if end_date else None,
-            )
-        else:
-            hist = ticker.history(period="1y")
-        # ticker.info can fail for some tickers — isolate error
-        try:
-            raw_info = ticker.info
-            info: dict[str, Any] = raw_info if isinstance(raw_info, dict) else {}
-        except Exception as e:
-            logger.debug(f"ticker.info failed for {ticker_symbol}: {e}")
-            info = {}
-        return hist, info
-
     try:
-        hist, info = await asyncio.to_thread(_fetch)
-        if hist.empty:
-            logger.warning(f"yfinance returned empty data for {ticker_symbol}")
+        client = _get_yf_client()
+        result = await client.get_stock_price(
+            code,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if result is None:
             return None
-        return _build_stock_result(code, ticker_symbol, hist, info)
+        # Convert StockPrice dataclass to dict for backward compatibility
+        return asdict(result)
     except Exception as e:
-        logger.warning(f"yfinance fetch failed for {ticker_symbol}: {e}")
+        logger.warning(f"Stock price fetch failed for {code}: {e}")
         return None
 
 
@@ -282,39 +228,21 @@ async def get_estat_data(
 
 
 # ---------------------------------------------------------------------------
-# Exchange rate adapter (macro context)
+# Exchange rate adapter (delegates to stockprice-mcp YfinanceClient)
 # ---------------------------------------------------------------------------
 
 
 async def get_exchange_rates() -> dict[str, Any] | None:
-    """Fetch JPY exchange rates via yfinance (USDJPY, EURJPY).
+    """Fetch JPY exchange rates via stockprice-mcp YfinanceClient (USDJPY, EURJPY).
 
     Returns real-time FX data as macro context — critical for exporters.
     """
-    import yfinance as yf
-
-    pairs = {"USDJPY": "USDJPY=X", "EURJPY": "EURJPY=X"}
-
-    def _fetch() -> dict[str, float]:
-        result: dict[str, float] = {}
-        for name, ticker_sym in pairs.items():
-            try:
-                t = yf.Ticker(ticker_sym)
-                hist = t.history(period="5d")
-                if not hist.empty:
-                    result[name] = float(hist["Close"].iloc[-1])
-            except Exception as e:
-                logger.debug(f"FX rate fetch failed for {name} ({ticker_sym}): {e}")
-        return result
-
     try:
-        rates = await asyncio.to_thread(_fetch)
-        if not rates:
+        client = _get_yf_client()
+        result = await client.get_fx_rates(pairs=["USDJPY", "EURJPY"])
+        if result is None:
             return None
-        return {
-            "source": "yfinance_fx",
-            "rates": rates,
-        }
+        return {"source": result.source, "rates": result.rates}
     except Exception as e:
         logger.warning(f"Exchange rate fetch failed: {e}")
         return None
@@ -333,8 +261,7 @@ def check_available_sources() -> dict[str, bool]:
         "estat": "estat_mcp",
     }
     result = {name: _is_available(pkg) for name, pkg in optional_sources.items()}
-    # yfinance is a required dependency — always available
-    result["stock_price"] = True
+    result["stock_price"] = _is_available("yfinance_mcp")
     return result
 
 

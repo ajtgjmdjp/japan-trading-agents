@@ -193,7 +193,11 @@ def _build_stock_price_section(sp: dict, code: str, labels: dict) -> list[str]:
 
 
 def _build_edinet_section(
-    statements: dict, code: str, sector: str, labels: dict, language: str,
+    statements: dict,
+    code: str,
+    sector: str,
+    labels: dict,
+    language: str,
 ) -> list[str]:
     """Build the EDINET financial-statements portion of the verified data summary."""
     lines: list[str] = []

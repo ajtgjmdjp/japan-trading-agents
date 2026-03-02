@@ -106,7 +106,8 @@ async def verify_key_facts(
     try:
         result = await llm.complete_json(VERIFIER_SYSTEM_PROMPT, user_prompt)
         verified_facts, feedback = _parse_verification_result(
-            result, decision.key_facts,
+            result,
+            decision.key_facts,
         )
         return decision.model_copy(update={"key_facts": verified_facts}), feedback
 

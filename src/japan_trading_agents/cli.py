@@ -149,7 +149,9 @@ _UI: dict[str, dict[str, str]] = {
 
 
 def _display_analyst_reports(
-    analyst_reports: list[AgentReport], con: Console, T: dict[str, str],
+    analyst_reports: list[AgentReport],
+    con: Console,
+    T: dict[str, str],
 ) -> None:
     """Display analyst report panels."""
     con.print("\n[bold cyan]--- Analyst Reports ---[/bold cyan]")
@@ -185,7 +187,9 @@ def _display_debate(debate: DebateResult | None, con: Console, T: dict[str, str]
 
 
 def _build_price_lines(
-    decision: TradingDecision, raw_data: dict[str, object] | None, T: dict[str, str],
+    decision: TradingDecision,
+    raw_data: dict[str, object] | None,
+    T: dict[str, str],
 ) -> list[str]:
     """Build formatted price lines (current, target, stop-loss) with % deltas."""
     stock_price = raw_data.get("stock_price") if raw_data else None
@@ -212,7 +216,9 @@ def _build_price_lines(
 
 
 def _build_decision_content(
-    decision: TradingDecision, price_lines: list[str], T: dict[str, str],
+    decision: TradingDecision,
+    price_lines: list[str],
+    T: dict[str, str],
 ) -> str:
     """Build rich-formatted decision panel content string."""
     d = decision
@@ -255,7 +261,9 @@ def _display_decision(
 
 
 def _display_risk_review(
-    risk_review: RiskReview | None, con: Console, T: dict[str, str],
+    risk_review: RiskReview | None,
+    con: Console,
+    T: dict[str, str],
 ) -> None:
     """Display risk manager review panel."""
     if not risk_review:
@@ -313,7 +321,10 @@ def _display_error_summary(result: AnalysisResult, con: Console) -> None:
 
 
 def _display_analysis_output(
-    result: AnalysisResult, changes: list[str], con: Console, T: dict[str, str],
+    result: AnalysisResult,
+    changes: list[str],
+    con: Console,
+    T: dict[str, str],
 ) -> None:
     """Display all analysis sections: header, reports, decision, risk, changes."""
     sources_count = len(result.sources_used)

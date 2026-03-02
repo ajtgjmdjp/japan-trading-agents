@@ -396,9 +396,7 @@ class TestBuildResearcherPrompt:
             code="4502",
             stance="bearish",
             reports=[
-                AgentReport(
-                    agent_name="test", display_name="Test", content="Some data"
-                ),
+                AgentReport(agent_name="test", display_name="Test", content="Some data"),
             ],
             counter_case=None,
             counter_label="Bull Case to Challenge",
@@ -694,7 +692,9 @@ async def test_verify_key_facts_llm_returns_truncated_json(mock_llm: LLMClient) 
     from japan_trading_agents.models import KeyFact, TradingDecision
 
     mock_llm.complete_json = AsyncMock(
-        side_effect=json.JSONDecodeError("Unterminated string", '{"verified_facts": [{"fact": "trun', 30),
+        side_effect=json.JSONDecodeError(
+            "Unterminated string", '{"verified_facts": [{"fact": "trun', 30
+        ),
     )
     decision = TradingDecision(
         action="HOLD",
