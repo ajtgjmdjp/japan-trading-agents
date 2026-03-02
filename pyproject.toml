@@ -89,9 +89,6 @@ mypy_path = ["src"]
 module = ["yfinance", "yfinance.*", "yfinance_mcp", "yfinance_mcp.*"]
 ignore_missing_imports = true
 
-[tool.uv.sources]
-stockprice-mcp = { path = "../stockprice-mcp", editable = true }
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
