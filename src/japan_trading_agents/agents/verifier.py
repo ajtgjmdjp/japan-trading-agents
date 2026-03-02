@@ -8,7 +8,7 @@ removes facts that cannot be found in the data.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -48,7 +48,7 @@ VERIFIER_SYSTEM_PROMPT = """\
 
 
 def _parse_verification_result(
-    result: dict,
+    result: dict[str, Any],
     original_facts: list[KeyFact],
 ) -> tuple[list[KeyFact], list[str]]:
     """Extract verified facts and feedback from the LLM response.

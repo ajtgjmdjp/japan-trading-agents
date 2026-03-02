@@ -142,7 +142,7 @@ def _get_sector_interp_note(sector: str, language: str) -> str:
     return ""
 
 
-def _build_stock_price_section(sp: dict, code: str, labels: dict) -> list[str]:
+def _build_stock_price_section(sp: dict[str, Any], code: str, labels: dict[str, str]) -> list[str]:
     """Build the stock-price portion of the verified data summary."""
     lines: list[str] = []
     price_date = sp.get("date", "today")
@@ -193,10 +193,10 @@ def _build_stock_price_section(sp: dict, code: str, labels: dict) -> list[str]:
 
 
 def _build_edinet_section(
-    statements: dict,
+    statements: dict[str, Any],
     code: str,
     sector: str,
-    labels: dict,
+    labels: dict[str, str],
     language: str,
 ) -> list[str]:
     """Build the EDINET financial-statements portion of the verified data summary."""
@@ -220,7 +220,7 @@ def _build_edinet_section(
     return lines
 
 
-def _build_tdnet_section(disclosures: list, labels: dict) -> list[str]:
+def _build_tdnet_section(disclosures: list[dict[str, Any]], labels: dict[str, str]) -> list[str]:
     """Build the TDNET disclosures portion of the verified data summary."""
     lines: list[str] = []
     lines.append(labels["tdnet_section"])
@@ -233,7 +233,7 @@ def _build_tdnet_section(disclosures: list, labels: dict) -> list[str]:
     return lines
 
 
-def _build_fx_section(fx: dict, labels: dict) -> list[str]:
+def _build_fx_section(fx: dict[str, Any], labels: dict[str, str]) -> list[str]:
     """Build the FX-rates portion of the verified data summary."""
     lines: list[str] = []
     lines.append(labels["fx_section"])
@@ -247,7 +247,7 @@ def _build_fx_section(fx: dict, labels: dict) -> list[str]:
     return lines
 
 
-def _build_estat_section(macro: list, labels: dict) -> list[str]:
+def _build_estat_section(macro: list[dict[str, Any]], labels: dict[str, str]) -> list[str]:
     """Build the e-Stat government-statistics portion of the verified data summary."""
     lines: list[str] = []
     lines.append(labels["estat_section"])
@@ -261,7 +261,7 @@ def _build_estat_section(macro: list, labels: dict) -> list[str]:
     return lines
 
 
-def _build_news_section(news: list, labels: dict) -> list[str]:
+def _build_news_section(news: list[dict[str, Any]], labels: dict[str, str]) -> list[str]:
     """Build the news-headlines portion of the verified data summary."""
     lines: list[str] = []
     lines.append(labels["news_section"])
